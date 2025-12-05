@@ -1,4 +1,5 @@
 import { type ModelMessage, streamText } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
 import * as readline from "node:readline/promises";
 
 const terminal = readline.createInterface({
@@ -15,7 +16,7 @@ async function main() {
     messages.push({ role: "user", content: userInput });
 
     const result = streamText({
-      model: "anthropic/claude-sonnet-4.5",
+      model: anthropic("claude-sonnet-4-5"),
       messages,
     });
 
