@@ -70,6 +70,33 @@ interface ResultData {
 }
 
 /**
+ * Calculate summary statistics from result data
+ */
+function calculateSummary(data: ResultData): {
+  totalTokens: number;
+  outputTokens: number;
+  stepCount: number;
+  model: string;
+  timestamp: string;
+} {
+  const totalTokens = data.steps.reduce(
+    (sum, step) => sum + step.usage.totalTokens,
+    0
+  );
+  const outputTokens = data.steps.reduce(
+    (sum, step) => sum + step.usage.outputTokens,
+    0
+  );
+  const stepCount = data.steps.length;
+  const model = data.steps[0]?.response.modelId || "unknown";
+  const timestamp = data.steps[0]?.response.timestamp
+    ? formatTimestamp(data.steps[0].response.timestamp)
+    : "";
+
+  return { totalTokens, outputTokens, stepCount, model, timestamp };
+}
+
+/**
  * Escape HTML special characters
  */
 function escapeHtml(text: string): string {
@@ -107,19 +134,25 @@ function formatTimestamp(timestamp: string): string {
  */
 function renderContentBlock(block: ContentBlock): string {
   if (block.type === "text") {
-    return `<div class="text-block">${escapeHtml(block.text)}</div>`;
+    return `<div class="text">${escapeHtml(block.text)}</div>`;
   } else if (block.type === "tool-call") {
     const inputJson = JSON.stringify(block.input, null, 2);
-    return `<div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">${escapeHtml(block.toolName)}</span><span class="tool-id">${escapeHtml(block.toolCallId)}</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>${escapeHtml(inputJson)}</pre></details></div>`;
+    return `<details class="tool">
+  <summary><span class="arrow">→</span> <span class="tool-name">${escapeHtml(block.toolName)}</span></summary>
+  <pre class="input">${escapeHtml(inputJson)}</pre>
+</details>`;
   } else if (block.type === "tool-result") {
-    const inputJson = JSON.stringify(block.input, null, 2);
     const outputText = block.output?.content
       ? block.output.content
           .map((c) => c.text || JSON.stringify(c))
           .join("\n")
       : "No output";
     const isError = block.output?.isError || false;
-    return `<div class="tool-result-block ${isError ? "error" : ""}"><div class="tool-header"><span class="tool-icon">${isError ? "❌" : "✓"}</span><span class="tool-name">${escapeHtml(block.toolName)}</span><span class="tool-id">${escapeHtml(block.toolCallId)}</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>${escapeHtml(inputJson)}</pre></details><details class="tool-output"><summary>Output</summary><pre>${escapeHtml(outputText)}</pre></details></div>`;
+    const statusIcon = isError ? "✗" : "✓";
+    return `<details class="result ${isError ? "error" : ""}">
+  <summary><span class="status ${isError ? "error" : "success"}">${statusIcon}</span> Output</summary>
+  <pre class="output">${escapeHtml(outputText)}</pre>
+</details>`;
   }
   return "";
 }
@@ -128,90 +161,41 @@ function renderContentBlock(block: ContentBlock): string {
  * Generate HTML report from result data
  */
 function generateHtml(data: ResultData): string {
+  const summary = calculateSummary(data);
+
   const stepsHtml = data.steps
     .map((step, index) => {
-      const userMessage = step.request.body.messages.find(
-        (m) => m.role === "user"
-      );
-      const userContentHtml = userMessage?.content
-        .map((block) => renderContentBlock(block))
-        .join("") || "<div class=\"text-block\">No prompt</div>";
+      const assistantContentHtml =
+        step.content.map((block) => renderContentBlock(block)).join("") ||
+        '<div class="text">No response</div>';
 
-      const assistantContentHtml = step.content
-        .map((block) => renderContentBlock(block))
-        .join("") || "<div class=\"text-block\">No response</div>";
-
-      const timestamp = formatTimestamp(step.response.timestamp);
+      const cachedInfo =
+        step.usage.cachedInputTokens > 0
+          ? `, ${step.usage.cachedInputTokens.toLocaleString()}⚡`
+          : "";
 
       return `
-        <div class="step">
-          <div class="step-header">
-            <h2>Step ${index + 1}</h2>
-            <span class="timestamp">${timestamp}</span>
-          </div>
-
-          <div class="metadata">
-            <div class="meta-item">
-              <span class="meta-label">Model:</span>
-              <span class="meta-value">${step.response.modelId}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Finish Reason:</span>
-              <span class="meta-value">${step.finishReason}</span>
-            </div>
-          </div>
-
-          <div class="usage">
-            <div class="usage-item">
-              <span class="usage-label">Input Tokens:</span>
-              <span class="usage-value">${step.usage.inputTokens.toLocaleString()}</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Output Tokens:</span>
-              <span class="usage-value">${step.usage.outputTokens.toLocaleString()}</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Total Tokens:</span>
-              <span class="usage-value">${step.usage.totalTokens.toLocaleString()}</span>
-            </div>
-            ${
-              step.usage.cachedInputTokens > 0
-                ? `<div class="usage-item">
-                <span class="usage-label">Cached Tokens:</span>
-                <span class="usage-value">${step.usage.cachedInputTokens.toLocaleString()}</span>
-              </div>`
-                : ""
-            }
-          </div>
-
-          <div class="section">
-            <h3>User Prompt</h3>
-            <div class="content user-content">${userContentHtml}</div>
-          </div>
-
-          <div class="section">
-            <h3>Assistant Response</h3>
-            <div class="content assistant-content">${assistantContentHtml}</div>
-          </div>
-        </div>
-      `;
+    <details class="step">
+      <summary class="step-header">
+        <span class="step-num">Step ${index + 1}</span>
+        <span class="line"></span>
+        <span class="tokens">${step.usage.totalTokens.toLocaleString()} tok</span>
+        <span class="output">(${step.usage.outputTokens.toLocaleString()}↑${cachedInfo})</span>
+        <span class="reason">${step.finishReason}</span>
+      </summary>
+      <div class="step-content">
+        ${assistantContentHtml}
+      </div>
+    </details>`;
     })
     .join("\n");
 
   const resultWriteHtml = data.resultWriteContent
     ? `
-    <div class="step result-write">
-      <div class="step-header">
-        <h2>ResultWrite Output</h2>
-      </div>
-      <div class="section">
-        <h3>Generated Content</h3>
-        <div class="content result-content">${escapeHtml(
-          data.resultWriteContent
-        )}</div>
-      </div>
-    </div>
-    `
+    <section class="result-write">
+      <h2>Output</h2>
+      <pre class="code">${escapeHtml(data.resultWriteContent)}</pre>
+    </section>`
     : "";
 
   return `<!DOCTYPE html>
@@ -221,281 +205,249 @@ function generateHtml(data: ResultData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI SDK Benchmark Results</title>
   <style>
+    :root {
+      --bg: #f8f8f8;
+      --surface: #ffffff;
+      --text: #24292e;
+      --text-muted: #6a737d;
+      --border: #e1e4e8;
+      --success: #238636;
+      --error: #cf222e;
+      --tool: #8250df;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --border: #30363d;
+      --success: #3fb950;
+      --error: #f85149;
+      --tool: #a371f7;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.5;
-      color: #333;
-      background-color: #f5f5f5;
-      padding: 1rem;
+    html {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.4;
     }
 
-    .container {
+    body {
+      padding: 12px;
       max-width: 1200px;
       margin: 0 auto;
     }
 
+    header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     h1 {
-      text-align: center;
-      margin-bottom: 1rem;
-      color: #1a1a1a;
-      font-size: 1.75rem;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 16px;
+    }
+
+    .theme-toggle:hover {
+      background: var(--border);
     }
 
     .step {
-      background: white;
-      border-radius: 6px;
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
     }
 
     .step-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid #e0e0e0;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
     }
 
-    .step-header h2 {
-      color: #2563eb;
-      font-size: 1.25rem;
+    .step-header::-webkit-details-marker {
+      display: none;
     }
 
-    .timestamp {
-      color: #666;
-      font-size: 0.85rem;
+    .step-header:hover {
+      background: var(--bg);
     }
 
-    .metadata {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 0.75rem;
-      flex-wrap: wrap;
-      font-size: 0.9rem;
-    }
-
-    .meta-item {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    .meta-label {
-      font-weight: 600;
-      color: #666;
-    }
-
-    .meta-value {
-      color: #333;
-    }
-
-    .usage {
-      display: flex;
-      gap: 1.5rem;
-      padding: 0.75rem;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-
-    .usage-item {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    .usage-label {
-      font-weight: 600;
-      color: #666;
-    }
-
-    .usage-value {
-      color: #2563eb;
+    .step-num {
       font-weight: 600;
     }
 
-    .section {
-      margin-bottom: 1rem;
+    .line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
 
-    .section:last-child {
-      margin-bottom: 0;
+    .tokens {
+      color: var(--text-muted);
     }
 
-    .section h3 {
-      color: #1a1a1a;
-      margin-bottom: 0.5rem;
-      font-size: 1rem;
+    .output {
+      color: var(--text);
     }
 
-    .content {
-      padding: 0.75rem;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 0.9rem;
+    .reason {
+      color: var(--text-muted);
+      font-size: 12px;
     }
 
-    .user-content {
-      background-color: #f0f9ff;
-      border-left: 3px solid #2563eb;
-      font-family: monospace;
+    .step-content {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .text {
       white-space: pre-wrap;
+      margin-bottom: 8px;
+      padding-left: 8px;
+      border-left: 2px solid var(--border);
     }
 
-    .assistant-content {
-      background-color: #fafafa;
-      border-left: 3px solid #16a34a;
-      font-family: monospace;
-      white-space: pre-wrap;
+    .tool,
+    .result {
+      margin: 8px 0;
+      border: 1px solid var(--border);
     }
 
-    .result-content {
-      background-color: #fffbeb;
-      border-left: 3px solid #f59e0b;
-      font-family: monospace;
-      white-space: pre-wrap;
+    .tool summary,
+    .result summary {
+      padding: 4px 8px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
     }
 
-    .result-write .step-header h2 {
-      color: #f59e0b;
+    .tool summary::-webkit-details-marker,
+    .result summary::-webkit-details-marker {
+      display: none;
     }
 
-    /* Tool block styles */
-    .text-block {
-      white-space: pre-wrap;
+    .tool summary:hover,
+    .result summary:hover {
+      background: var(--bg);
     }
 
-    .tool-call-block,
-    .tool-result-block {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 4px;
-      padding: 0.75rem;
-      margin: 0.75rem 0;
-    }
-
-    .tool-call-block {
-      border-left: 3px solid #3b82f6;
-    }
-
-    .tool-result-block {
-      border-left: 3px solid #10b981;
-    }
-
-    .tool-result-block.error {
-      border-left-color: #ef4444;
-      background-color: #fef2f2;
-    }
-
-    .tool-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    .tool-icon {
-      font-size: 1rem;
+    .arrow {
+      color: var(--tool);
     }
 
     .tool-name {
       font-weight: 600;
-      color: #1e293b;
     }
 
-    .tool-id {
-      font-size: 0.75rem;
-      color: #64748b;
-      font-family: monospace;
+    .status {
+      font-weight: 600;
     }
 
-    .tool-input {
-      margin-top: 0.5rem;
-      cursor: pointer;
+    .status.success {
+      color: var(--success);
     }
 
-    .tool-input summary {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #475569;
-      padding: 0.25rem 0;
-      user-select: none;
+    .status.error {
+      color: var(--error);
     }
 
-    .tool-input summary:hover {
-      color: #1e293b;
+    .result.error {
+      border-color: var(--error);
     }
 
-    .tool-input pre {
-      margin-top: 0.5rem;
-      padding: 0.5rem;
-      background-color: #f1f5f9;
-      border-radius: 3px;
-      font-size: 0.8rem;
+    .input,
+    .output {
+      padding: 8px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
       overflow-x: auto;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
     }
 
-    .tool-output {
-      margin-top: 0.5rem;
-      cursor: pointer;
+    .result-write {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
     }
 
-    .tool-output summary {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #475569;
-      padding: 0.25rem 0;
-      user-select: none;
+    .result-write h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
     }
 
-    .tool-output summary:hover {
-      color: #1e293b;
-    }
-
-    .tool-output pre {
-      margin-top: 0.5rem;
-      padding: 0.5rem;
-      background-color: #f1f5f9;
-      border-radius: 3px;
-      font-size: 0.8rem;
+    .code {
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
       overflow-x: auto;
+      font-size: 12px;
       white-space: pre-wrap;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
     }
 
     @media (max-width: 768px) {
       body {
-        padding: 0.75rem;
-      }
-
-      .step {
-        padding: 1rem;
-      }
-
-      .metadata,
-      .usage {
-        flex-direction: column;
-        gap: 0.4rem;
+        padding: 8px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AI SDK Benchmark Results</h1>
-    ${stepsHtml}
-    ${resultWriteHtml}
-  </div>
+  <header>
+    <div>
+      <h1>AI SDK Benchmark</h1>
+      <div class="meta">${summary.model} · ${summary.stepCount} steps · ${summary.totalTokens.toLocaleString()} tokens · ${summary.timestamp}</div>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()">◐</button>
+  </header>
+
+  ${stepsHtml}
+  ${resultWriteHtml}
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.dataset.theme || 'light';
+      const next = current === 'light' ? 'dark' : 'light';
+      html.dataset.theme = next;
+      localStorage.setItem('theme', next);
+    }
+
+    document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';
+  </script>
 </body>
 </html>`;
 }

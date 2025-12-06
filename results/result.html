@@ -5,320 +5,251 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI SDK Benchmark Results</title>
   <style>
+    :root {
+      --bg: #f8f8f8;
+      --surface: #ffffff;
+      --text: #24292e;
+      --text-muted: #6a737d;
+      --border: #e1e4e8;
+      --success: #238636;
+      --error: #cf222e;
+      --tool: #8250df;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --border: #30363d;
+      --success: #3fb950;
+      --error: #f85149;
+      --tool: #a371f7;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.5;
-      color: #333;
-      background-color: #f5f5f5;
-      padding: 1rem;
+    html {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.4;
     }
 
-    .container {
+    body {
+      padding: 12px;
       max-width: 1200px;
       margin: 0 auto;
     }
 
+    header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     h1 {
-      text-align: center;
-      margin-bottom: 1rem;
-      color: #1a1a1a;
-      font-size: 1.75rem;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 16px;
+    }
+
+    .theme-toggle:hover {
+      background: var(--border);
     }
 
     .step {
-      background: white;
-      border-radius: 6px;
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
     }
 
     .step-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid #e0e0e0;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
     }
 
-    .step-header h2 {
-      color: #2563eb;
-      font-size: 1.25rem;
+    .step-header::-webkit-details-marker {
+      display: none;
     }
 
-    .timestamp {
-      color: #666;
-      font-size: 0.85rem;
+    .step-header:hover {
+      background: var(--bg);
     }
 
-    .metadata {
-      display: flex;
-      gap: 1.5rem;
-      margin-bottom: 0.75rem;
-      flex-wrap: wrap;
-      font-size: 0.9rem;
-    }
-
-    .meta-item {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    .meta-label {
-      font-weight: 600;
-      color: #666;
-    }
-
-    .meta-value {
-      color: #333;
-    }
-
-    .usage {
-      display: flex;
-      gap: 1.5rem;
-      padding: 0.75rem;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-
-    .usage-item {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    .usage-label {
-      font-weight: 600;
-      color: #666;
-    }
-
-    .usage-value {
-      color: #2563eb;
+    .step-num {
       font-weight: 600;
     }
 
-    .section {
-      margin-bottom: 1rem;
+    .line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
 
-    .section:last-child {
-      margin-bottom: 0;
+    .tokens {
+      color: var(--text-muted);
     }
 
-    .section h3 {
-      color: #1a1a1a;
-      margin-bottom: 0.5rem;
-      font-size: 1rem;
+    .output {
+      color: var(--text);
     }
 
-    .content {
-      padding: 0.75rem;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 0.9rem;
+    .reason {
+      color: var(--text-muted);
+      font-size: 12px;
     }
 
-    .user-content {
-      background-color: #f0f9ff;
-      border-left: 3px solid #2563eb;
-      font-family: monospace;
+    .step-content {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .text {
       white-space: pre-wrap;
+      margin-bottom: 8px;
+      padding-left: 8px;
+      border-left: 2px solid var(--border);
     }
 
-    .assistant-content {
-      background-color: #fafafa;
-      border-left: 3px solid #16a34a;
-      font-family: monospace;
-      white-space: pre-wrap;
+    .tool,
+    .result {
+      margin: 8px 0;
+      border: 1px solid var(--border);
     }
 
-    .result-content {
-      background-color: #fffbeb;
-      border-left: 3px solid #f59e0b;
-      font-family: monospace;
-      white-space: pre-wrap;
+    .tool summary,
+    .result summary {
+      padding: 4px 8px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
     }
 
-    .result-write .step-header h2 {
-      color: #f59e0b;
+    .tool summary::-webkit-details-marker,
+    .result summary::-webkit-details-marker {
+      display: none;
     }
 
-    /* Tool block styles */
-    .text-block {
-      white-space: pre-wrap;
+    .tool summary:hover,
+    .result summary:hover {
+      background: var(--bg);
     }
 
-    .tool-call-block,
-    .tool-result-block {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 4px;
-      padding: 0.75rem;
-      margin: 0.75rem 0;
-    }
-
-    .tool-call-block {
-      border-left: 3px solid #3b82f6;
-    }
-
-    .tool-result-block {
-      border-left: 3px solid #10b981;
-    }
-
-    .tool-result-block.error {
-      border-left-color: #ef4444;
-      background-color: #fef2f2;
-    }
-
-    .tool-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    .tool-icon {
-      font-size: 1rem;
+    .arrow {
+      color: var(--tool);
     }
 
     .tool-name {
       font-weight: 600;
-      color: #1e293b;
     }
 
-    .tool-id {
-      font-size: 0.75rem;
-      color: #64748b;
-      font-family: monospace;
+    .status {
+      font-weight: 600;
     }
 
-    .tool-input {
-      margin-top: 0.5rem;
-      cursor: pointer;
+    .status.success {
+      color: var(--success);
     }
 
-    .tool-input summary {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #475569;
-      padding: 0.25rem 0;
-      user-select: none;
+    .status.error {
+      color: var(--error);
     }
 
-    .tool-input summary:hover {
-      color: #1e293b;
+    .result.error {
+      border-color: var(--error);
     }
 
-    .tool-input pre {
-      margin-top: 0.5rem;
-      padding: 0.5rem;
-      background-color: #f1f5f9;
-      border-radius: 3px;
-      font-size: 0.8rem;
+    .input,
+    .output {
+      padding: 8px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
       overflow-x: auto;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
     }
 
-    .tool-output {
-      margin-top: 0.5rem;
-      cursor: pointer;
+    .result-write {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
     }
 
-    .tool-output summary {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #475569;
-      padding: 0.25rem 0;
-      user-select: none;
+    .result-write h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
     }
 
-    .tool-output summary:hover {
-      color: #1e293b;
-    }
-
-    .tool-output pre {
-      margin-top: 0.5rem;
-      padding: 0.5rem;
-      background-color: #f1f5f9;
-      border-radius: 3px;
-      font-size: 0.8rem;
+    .code {
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
       overflow-x: auto;
+      font-size: 12px;
       white-space: pre-wrap;
-      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
     }
 
     @media (max-width: 768px) {
       body {
-        padding: 0.75rem;
-      }
-
-      .step {
-        padding: 1rem;
-      }
-
-      .metadata,
-      .usage {
-        flex-direction: column;
-        gap: 0.4rem;
+        padding: 8px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AI SDK Benchmark Results</h1>
-    
-        <div class="step">
-          <div class="step-header">
-            <h2>Step 1</h2>
-            <span class="timestamp">Dec 6, 2025 at 03:28:27 AM</span>
-          </div>
+  <header>
+    <div>
+      <h1>AI SDK Benchmark</h1>
+      <div class="meta">claude-haiku-4-5-20251001 · 4 steps · 42,302 tokens · Dec 6, 2025 at 03:28:27 AM</div>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()">◐</button>
+  </header>
 
-          <div class="metadata">
-            <div class="meta-item">
-              <span class="meta-label">Model:</span>
-              <span class="meta-value">claude-haiku-4-5-20251001</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Finish Reason:</span>
-              <span class="meta-value">tool-calls</span>
-            </div>
-          </div>
-
-          <div class="usage">
-            <div class="usage-item">
-              <span class="usage-label">Input Tokens:</span>
-              <span class="usage-value">1,911</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Output Tokens:</span>
-              <span class="usage-value">68</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Total Tokens:</span>
-              <span class="usage-value">1,979</span>
-            </div>
-            
-          </div>
-
-          <div class="section">
-            <h3>User Prompt</h3>
-            <div class="content user-content"><div class="text-block">Can you build a counter component in svelte? Use the ResultWrite tool to write the result to a file when you are done.</div></div>
-          </div>
-
-          <div class="section">
-            <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">I&#039;ll create a counter component in Svelte for you. Let me first check the documentation to understand the best practices for Svelte 5.</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">list-sections</span><span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">list-sections</span><span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{}</pre></details><details class="tool-output"><summary>Output</summary><pre>List of available Svelte documentation sections with their intended use cases. The &quot;use_cases&quot; field describes WHEN each section would be useful - analyze these carefully to determine which sections match the user&#039;s query:
+  
+    <details class="step">
+      <summary class="step-header">
+        <span class="step-num">Step 1</span>
+        <span class="line"></span>
+        <span class="tokens">1,979 tok</span>
+        <span class="output">(68↑)</span>
+        <span class="reason">tool-calls</span>
+      </summary>
+      <div class="step-content">
+        <div class="text">I&#039;ll create a counter component in Svelte for you. Let me first check the documentation to understand the best practices for Svelte 5.</div><details class="tool">
+  <summary><span class="arrow">→</span> <span class="tool-name">list-sections</span></summary>
+  <pre class="input">{}</pre>
+</details><details class="result ">
+  <summary><span class="status success">✓</span> Output</summary>
+  <pre class="output">List of available Svelte documentation sections with their intended use cases. The &quot;use_cases&quot; field describes WHEN each section would be useful - analyze these carefully to determine which sections match the user&#039;s query:
 
 - title: Overview, use_cases: project setup, creating new svelte apps, scaffolding, cli tools, initializing projects, path: cli/overview
 - title: Frequently asked questions, use_cases: project setup, initializing new svelte projects, troubleshooting cli installation, package manager configuration, path: cli/faq
@@ -496,62 +427,31 @@
 - title: &lt;svelte:self&gt;, use_cases: recursive components, tree structures, nested menus, file explorers, comment threads, hierarchical data, path: svelte/legacy-svelte-self
 - title: Imperative component API, use_cases: migration from svelte 3/4 to 5, legacy component api, maintaining old projects, understanding deprecated patterns, path: svelte/legacy-component-api
 
-Carefully analyze the use_cases field for each section to identify which documentation is relevant for the user&#039;s specific query. The use_cases contain keywords for project types, features, components, and development stages. After identifying relevant sections, use the get-documentation tool with ALL relevant section titles or paths at once (can pass multiple sections as an array).</pre></details></div></div>
-          </div>
-        </div>
-      
+Carefully analyze the use_cases field for each section to identify which documentation is relevant for the user&#039;s specific query. The use_cases contain keywords for project types, features, components, and development stages. After identifying relevant sections, use the get-documentation tool with ALL relevant section titles or paths at once (can pass multiple sections as an array).</pre>
+</details>
+      </div>
+    </details>
 
-        <div class="step">
-          <div class="step-header">
-            <h2>Step 2</h2>
-            <span class="timestamp">Dec 6, 2025 at 03:28:29 AM</span>
-          </div>
-
-          <div class="metadata">
-            <div class="meta-item">
-              <span class="meta-label">Model:</span>
-              <span class="meta-value">claude-haiku-4-5-20251001</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Finish Reason:</span>
-              <span class="meta-value">tool-calls</span>
-            </div>
-          </div>
-
-          <div class="usage">
-            <div class="usage-item">
-              <span class="usage-label">Input Tokens:</span>
-              <span class="usage-value">10,335</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Output Tokens:</span>
-              <span class="usage-value">75</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Total Tokens:</span>
-              <span class="usage-value">10,410</span>
-            </div>
-            
-          </div>
-
-          <div class="section">
-            <h3>User Prompt</h3>
-            <div class="content user-content"><div class="text-block">Can you build a counter component in svelte? Use the ResultWrite tool to write the result to a file when you are done.</div></div>
-          </div>
-
-          <div class="section">
-            <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Now let me fetch the relevant documentation for building a counter component:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">get-documentation</span><span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
+    <details class="step">
+      <summary class="step-header">
+        <span class="step-num">Step 2</span>
+        <span class="line"></span>
+        <span class="tokens">10,410 tok</span>
+        <span class="output">(75↑)</span>
+        <span class="reason">tool-calls</span>
+      </summary>
+      <div class="step-content">
+        <div class="text">Now let me fetch the relevant documentation for building a counter component:</div><details class="tool">
+  <summary><span class="arrow">→</span> <span class="tool-name">get-documentation</span></summary>
+  <pre class="input">{
   &quot;section&quot;: [
     &quot;$state&quot;,
     &quot;basic-markup&quot;
   ]
-}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">get-documentation</span><span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
-  &quot;section&quot;: [
-    &quot;$state&quot;,
-    &quot;basic-markup&quot;
-  ]
-}</pre></details><details class="tool-output"><summary>Output</summary><pre>## $state
+}</pre>
+</details><details class="result ">
+  <summary><span class="status success">✓</span> Output</summary>
+  <pre class="output">## $state
 
 The `$state` rune allows you to create _reactive state_, which means that your UI _reacts_ when it changes.
 
@@ -903,120 +803,58 @@ export function increment() {
 
 ## basic-markup
 
-Error: Section not found.</pre></details></div></div>
-          </div>
-        </div>
-      
-
-        <div class="step">
-          <div class="step-header">
-            <h2>Step 3</h2>
-            <span class="timestamp">Dec 6, 2025 at 03:28:32 AM</span>
-          </div>
-
-          <div class="metadata">
-            <div class="meta-item">
-              <span class="meta-label">Model:</span>
-              <span class="meta-value">claude-haiku-4-5-20251001</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Finish Reason:</span>
-              <span class="meta-value">tool-calls</span>
-            </div>
-          </div>
-
-          <div class="usage">
-            <div class="usage-item">
-              <span class="usage-label">Input Tokens:</span>
-              <span class="usage-value">14,172</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Output Tokens:</span>
-              <span class="usage-value">512</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Total Tokens:</span>
-              <span class="usage-value">14,684</span>
-            </div>
-            
-          </div>
-
-          <div class="section">
-            <h3>User Prompt</h3>
-            <div class="content user-content"><div class="text-block">Can you build a counter component in svelte? Use the ResultWrite tool to write the result to a file when you are done.</div></div>
-          </div>
-
-          <div class="section">
-            <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Perfect! Now I have the documentation I need. Let me create a counter component in Svelte:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">svelte-autofixer</span><span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
-  &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
-  &quot;desired_svelte_version&quot;: 5,
-  &quot;filename&quot;: &quot;Counter.svelte&quot;
-}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">svelte-autofixer</span><span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
-  &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
-  &quot;desired_svelte_version&quot;: 5,
-  &quot;filename&quot;: &quot;Counter.svelte&quot;
-}</pre></details><details class="tool-output"><summary>Output</summary><pre>{&quot;issues&quot;:[],&quot;suggestions&quot;:[],&quot;require_another_tool_call_after_fixing&quot;:false}</pre></details></div></div>
-          </div>
-        </div>
-      
-
-        <div class="step">
-          <div class="step-header">
-            <h2>Step 4</h2>
-            <span class="timestamp">Dec 6, 2025 at 03:28:35 AM</span>
-          </div>
-
-          <div class="metadata">
-            <div class="meta-item">
-              <span class="meta-label">Model:</span>
-              <span class="meta-value">claude-haiku-4-5-20251001</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Finish Reason:</span>
-              <span class="meta-value">tool-calls</span>
-            </div>
-          </div>
-
-          <div class="usage">
-            <div class="usage-item">
-              <span class="usage-label">Input Tokens:</span>
-              <span class="usage-value">14,768</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Output Tokens:</span>
-              <span class="usage-value">461</span>
-            </div>
-            <div class="usage-item">
-              <span class="usage-label">Total Tokens:</span>
-              <span class="usage-value">15,229</span>
-            </div>
-            
-          </div>
-
-          <div class="section">
-            <h3>User Prompt</h3>
-            <div class="content user-content"><div class="text-block">Can you build a counter component in svelte? Use the ResultWrite tool to write the result to a file when you are done.</div></div>
-          </div>
-
-          <div class="section">
-            <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Great! The component is valid. Now let me write it to a file:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">ResultWrite</span><span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
-  &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
-}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">ResultWrite</span><span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
-  &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
-}</pre></details><details class="tool-output"><summary>Output</summary><pre>No output</pre></details></div></div>
-          </div>
-        </div>
-      
-    
-    <div class="step result-write">
-      <div class="step-header">
-        <h2>ResultWrite Output</h2>
+Error: Section not found.</pre>
+</details>
       </div>
-      <div class="section">
-        <h3>Generated Content</h3>
-        <div class="content result-content">&lt;script&gt;
+    </details>
+
+    <details class="step">
+      <summary class="step-header">
+        <span class="step-num">Step 3</span>
+        <span class="line"></span>
+        <span class="tokens">14,684 tok</span>
+        <span class="output">(512↑)</span>
+        <span class="reason">tool-calls</span>
+      </summary>
+      <div class="step-content">
+        <div class="text">Perfect! Now I have the documentation I need. Let me create a counter component in Svelte:</div><details class="tool">
+  <summary><span class="arrow">→</span> <span class="tool-name">svelte-autofixer</span></summary>
+  <pre class="input">{
+  &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
+  &quot;desired_svelte_version&quot;: 5,
+  &quot;filename&quot;: &quot;Counter.svelte&quot;
+}</pre>
+</details><details class="result ">
+  <summary><span class="status success">✓</span> Output</summary>
+  <pre class="output">{&quot;issues&quot;:[],&quot;suggestions&quot;:[],&quot;require_another_tool_call_after_fixing&quot;:false}</pre>
+</details>
+      </div>
+    </details>
+
+    <details class="step">
+      <summary class="step-header">
+        <span class="step-num">Step 4</span>
+        <span class="line"></span>
+        <span class="tokens">15,229 tok</span>
+        <span class="output">(461↑)</span>
+        <span class="reason">tool-calls</span>
+      </summary>
+      <div class="step-content">
+        <div class="text">Great! The component is valid. Now let me write it to a file:</div><details class="tool">
+  <summary><span class="arrow">→</span> <span class="tool-name">ResultWrite</span></summary>
+  <pre class="input">{
+  &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
+}</pre>
+</details><details class="result ">
+  <summary><span class="status success">✓</span> Output</summary>
+  <pre class="output">No output</pre>
+</details>
+      </div>
+    </details>
+  
+    <section class="result-write">
+      <h2>Output</h2>
+      <pre class="code">&lt;script&gt;
 	let count = $state(0);
 
 	function increment() {
@@ -1081,10 +919,19 @@ Error: Section not found.</pre></details></div></div>
 	button:active {
 		transform: scale(0.98);
 	}
-&lt;/style&gt;</div>
-      </div>
-    </div>
-    
-  </div>
+&lt;/style&gt;</pre>
+    </section>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.dataset.theme || 'light';
+      const next = current === 'light' ? 'dark' : 'light';
+      html.dataset.theme = next;
+      localStorage.setItem('theme', next);
+    }
+
+    document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';
+  </script>
 </body>
 </html>
