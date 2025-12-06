@@ -318,32 +318,7 @@
 
           <div class="section">
             <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">I&#039;ll create a counter component in Svelte for you. Let me first check the documentation to understand the best practices for Svelte 5.</div>
-      <div class="tool-call-block">
-        <div class="tool-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-name">list-sections</span>
-          <span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{}</pre>
-        </details>
-      </div>
-    
-      <div class="tool-result-block ">
-        <div class="tool-header">
-          <span class="tool-icon">✓</span>
-          <span class="tool-name">list-sections</span>
-          <span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{}</pre>
-        </details>
-        <details class="tool-output">
-          <summary>Output</summary>
-          <pre>List of available Svelte documentation sections with their intended use cases. The &quot;use_cases&quot; field describes WHEN each section would be useful - analyze these carefully to determine which sections match the user&#039;s query:
+            <div class="content assistant-content"><div class="text-block">I&#039;ll create a counter component in Svelte for you. Let me first check the documentation to understand the best practices for Svelte 5.</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">list-sections</span><span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">list-sections</span><span class="tool-id">toolu_01BnXTNz8cYuipbRdN5GhzMj</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{}</pre></details><details class="tool-output"><summary>Output</summary><pre>List of available Svelte documentation sections with their intended use cases. The &quot;use_cases&quot; field describes WHEN each section would be useful - analyze these carefully to determine which sections match the user&#039;s query:
 
 - title: Overview, use_cases: project setup, creating new svelte apps, scaffolding, cli tools, initializing projects, path: cli/overview
 - title: Frequently asked questions, use_cases: project setup, initializing new svelte projects, troubleshooting cli installation, package manager configuration, path: cli/faq
@@ -521,10 +496,7 @@
 - title: &lt;svelte:self&gt;, use_cases: recursive components, tree structures, nested menus, file explorers, comment threads, hierarchical data, path: svelte/legacy-svelte-self
 - title: Imperative component API, use_cases: migration from svelte 3/4 to 5, legacy component api, maintaining old projects, understanding deprecated patterns, path: svelte/legacy-component-api
 
-Carefully analyze the use_cases field for each section to identify which documentation is relevant for the user&#039;s specific query. The use_cases contain keywords for project types, features, components, and development stages. After identifying relevant sections, use the get-documentation tool with ALL relevant section titles or paths at once (can pass multiple sections as an array).</pre>
-        </details>
-      </div>
-    </div>
+Carefully analyze the use_cases field for each section to identify which documentation is relevant for the user&#039;s specific query. The use_cases contain keywords for project types, features, components, and development stages. After identifying relevant sections, use the get-documentation tool with ALL relevant section titles or paths at once (can pass multiple sections as an array).</pre></details></div></div>
           </div>
         </div>
       
@@ -569,42 +541,17 @@ Carefully analyze the use_cases field for each section to identify which documen
 
           <div class="section">
             <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Now let me fetch the relevant documentation for building a counter component:</div>
-      <div class="tool-call-block">
-        <div class="tool-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-name">get-documentation</span>
-          <span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+            <div class="content assistant-content"><div class="text-block">Now let me fetch the relevant documentation for building a counter component:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">get-documentation</span><span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;section&quot;: [
     &quot;$state&quot;,
     &quot;basic-markup&quot;
   ]
-}</pre>
-        </details>
-      </div>
-    
-      <div class="tool-result-block ">
-        <div class="tool-header">
-          <span class="tool-icon">✓</span>
-          <span class="tool-name">get-documentation</span>
-          <span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">get-documentation</span><span class="tool-id">toolu_013QorgaEGZY36T8URbhEgkQ</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;section&quot;: [
     &quot;$state&quot;,
     &quot;basic-markup&quot;
   ]
-}</pre>
-        </details>
-        <details class="tool-output">
-          <summary>Output</summary>
-          <pre>## $state
+}</pre></details><details class="tool-output"><summary>Output</summary><pre>## $state
 
 The `$state` rune allows you to create _reactive state_, which means that your UI _reacts_ when it changes.
 
@@ -956,10 +903,7 @@ export function increment() {
 
 ## basic-markup
 
-Error: Section not found.</pre>
-        </details>
-      </div>
-    </div>
+Error: Section not found.</pre></details></div></div>
           </div>
         </div>
       
@@ -1004,43 +948,15 @@ Error: Section not found.</pre>
 
           <div class="section">
             <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Perfect! Now I have the documentation I need. Let me create a counter component in Svelte:</div>
-      <div class="tool-call-block">
-        <div class="tool-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-name">svelte-autofixer</span>
-          <span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+            <div class="content assistant-content"><div class="text-block">Perfect! Now I have the documentation I need. Let me create a counter component in Svelte:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">svelte-autofixer</span><span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
   &quot;desired_svelte_version&quot;: 5,
   &quot;filename&quot;: &quot;Counter.svelte&quot;
-}</pre>
-        </details>
-      </div>
-    
-      <div class="tool-result-block ">
-        <div class="tool-header">
-          <span class="tool-icon">✓</span>
-          <span class="tool-name">svelte-autofixer</span>
-          <span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">svelte-autofixer</span><span class="tool-id">toolu_01RqwQ22WVdJzabF9JXMwsfv</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
   &quot;desired_svelte_version&quot;: 5,
   &quot;filename&quot;: &quot;Counter.svelte&quot;
-}</pre>
-        </details>
-        <details class="tool-output">
-          <summary>Output</summary>
-          <pre>{&quot;issues&quot;:[],&quot;suggestions&quot;:[],&quot;require_another_tool_call_after_fixing&quot;:false}</pre>
-        </details>
-      </div>
-    </div>
+}</pre></details><details class="tool-output"><summary>Output</summary><pre>{&quot;issues&quot;:[],&quot;suggestions&quot;:[],&quot;require_another_tool_call_after_fixing&quot;:false}</pre></details></div></div>
           </div>
         </div>
       
@@ -1085,39 +1001,11 @@ Error: Section not found.</pre>
 
           <div class="section">
             <h3>Assistant Response</h3>
-            <div class="content assistant-content"><div class="text-block">Great! The component is valid. Now let me write it to a file:</div>
-      <div class="tool-call-block">
-        <div class="tool-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-name">ResultWrite</span>
-          <span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+            <div class="content assistant-content"><div class="text-block">Great! The component is valid. Now let me write it to a file:</div><div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">ResultWrite</span><span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
-}</pre>
-        </details>
-      </div>
-    
-      <div class="tool-result-block ">
-        <div class="tool-header">
-          <span class="tool-icon">✓</span>
-          <span class="tool-name">ResultWrite</span>
-          <span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>{
+}</pre></details></div><div class="tool-result-block "><div class="tool-header"><span class="tool-icon">✓</span><span class="tool-name">ResultWrite</span><span class="tool-id">toolu_01XUSQxzWQKEXKLqgFPkzige</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>{
   &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
-}</pre>
-        </details>
-        <details class="tool-output">
-          <summary>Output</summary>
-          <pre>No output</pre>
-        </details>
-      </div>
-    </div>
+}</pre></details><details class="tool-output"><summary>Output</summary><pre>No output</pre></details></div></div>
           </div>
         </div>
       

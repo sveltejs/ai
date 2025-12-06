@@ -110,19 +110,7 @@ function renderContentBlock(block: ContentBlock): string {
     return `<div class="text-block">${escapeHtml(block.text)}</div>`;
   } else if (block.type === "tool-call") {
     const inputJson = JSON.stringify(block.input, null, 2);
-    return `
-      <div class="tool-call-block">
-        <div class="tool-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-name">${escapeHtml(block.toolName)}</span>
-          <span class="tool-id">${escapeHtml(block.toolCallId)}</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>${escapeHtml(inputJson)}</pre>
-        </details>
-      </div>
-    `;
+    return `<div class="tool-call-block"><div class="tool-header"><span class="tool-icon">🔧</span><span class="tool-name">${escapeHtml(block.toolName)}</span><span class="tool-id">${escapeHtml(block.toolCallId)}</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>${escapeHtml(inputJson)}</pre></details></div>`;
   } else if (block.type === "tool-result") {
     const inputJson = JSON.stringify(block.input, null, 2);
     const outputText = block.output?.content
@@ -131,23 +119,7 @@ function renderContentBlock(block: ContentBlock): string {
           .join("\n")
       : "No output";
     const isError = block.output?.isError || false;
-    return `
-      <div class="tool-result-block ${isError ? "error" : ""}">
-        <div class="tool-header">
-          <span class="tool-icon">${isError ? "❌" : "✓"}</span>
-          <span class="tool-name">${escapeHtml(block.toolName)}</span>
-          <span class="tool-id">${escapeHtml(block.toolCallId)}</span>
-        </div>
-        <details class="tool-input">
-          <summary>Input Parameters</summary>
-          <pre>${escapeHtml(inputJson)}</pre>
-        </details>
-        <details class="tool-output">
-          <summary>Output</summary>
-          <pre>${escapeHtml(outputText)}</pre>
-        </details>
-      </div>
-    `;
+    return `<div class="tool-result-block ${isError ? "error" : ""}"><div class="tool-header"><span class="tool-icon">${isError ? "❌" : "✓"}</span><span class="tool-name">${escapeHtml(block.toolName)}</span><span class="tool-id">${escapeHtml(block.toolCallId)}</span></div><details class="tool-input"><summary>Input Parameters</summary><pre>${escapeHtml(inputJson)}</pre></details><details class="tool-output"><summary>Output</summary><pre>${escapeHtml(outputText)}</pre></details></div>`;
   }
   return "";
 }
