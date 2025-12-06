@@ -235,7 +235,7 @@
   <header>
     <div>
       <h1>SvelteBench 2.0</h1>
-      <div class="meta">claude-haiku-4-5-20251001 · 4 steps · 42,302 tokens · Dec 6, 2025 at 03:28:27 AM</div>
+      <div class="meta">claude-haiku-4-5-20251001 · 4 steps · 42,551 tokens · Dec 6, 2025 at 07:24:57 PM</div>
     </div>
     <button class="theme-toggle" onclick="toggleTheme()">◐</button>
   </header>
@@ -245,12 +245,12 @@
       <summary class="step-header">
         <span class="step-num">Step 1</span>
         <span class="line"></span>
-        <span class="tokens">1,979 tok</span>
-        <span class="output">(68↑)</span>
+        <span class="tokens">1,983 tok</span>
+        <span class="output">(72↑)</span>
         <span class="reason">tool-calls</span>
       </summary>
       <div class="step-content">
-        <div class="text">I&#039;ll create a counter component in Svelte for you. Let me first check the documentation to understand the best practices for Svelte 5.</div><details class="tool">
+        <div class="text">I&#039;ll create a counter component for you in Svelte. Let me start by checking the documentation to ensure I&#039;m using the latest Svelte 5 patterns.</div><details class="tool">
   <summary><span class="arrow">→</span> <span class="tool-name">list-sections</span></summary>
   <pre class="input">{}</pre>
 </details><details class="result ">
@@ -442,12 +442,12 @@ Carefully analyze the use_cases field for each section to identify which documen
       <summary class="step-header">
         <span class="step-num">Step 2</span>
         <span class="line"></span>
-        <span class="tokens">10,410 tok</span>
-        <span class="output">(75↑)</span>
+        <span class="tokens">10,423 tok</span>
+        <span class="output">(84↑)</span>
         <span class="reason">tool-calls</span>
       </summary>
       <div class="step-content">
-        <div class="text">Now let me fetch the relevant documentation for building a counter component:</div><details class="tool">
+        <div class="text">Now let me fetch the relevant documentation for creating a counter component using Svelte 5 runes:</div><details class="tool">
   <summary><span class="arrow">→</span> <span class="tool-name">get-documentation</span></summary>
   <pre class="input">{
   &quot;section&quot;: [
@@ -818,15 +818,15 @@ Error: Section not found.</pre>
       <summary class="step-header">
         <span class="step-num">Step 3</span>
         <span class="line"></span>
-        <span class="tokens">14,684 tok</span>
-        <span class="output">(512↑)</span>
+        <span class="tokens">14,769 tok</span>
+        <span class="output">(584↑)</span>
         <span class="reason">tool-calls</span>
       </summary>
       <div class="step-content">
-        <div class="text">Perfect! Now I have the documentation I need. Let me create a counter component in Svelte:</div><details class="tool">
+        <div class="text">Perfect! Now I have the information I need. Let me create a simple counter component using Svelte 5&#039;s `$state` rune:</div><details class="tool">
   <summary><span class="arrow">→</span> <span class="tool-name">svelte-autofixer</span></summary>
   <pre class="input">{
-  &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;,
+  &quot;code&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter&lt;/h1&gt;\n\t&lt;p&gt;Current count: {count}&lt;/p&gt;\n\t\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;\n\t\t\tDecrease\n\t\t&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;\n\t\t\tIncrease\n\t\t&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;\n\t\t\tReset\n\t\t&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: sans-serif;\n\t}\n\n\th1 {\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\tp {\n\t\tfont-size: 2rem;\n\t\tfont-weight: bold;\n\t\tcolor: #0066cc;\n\t\tmargin: 0;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1rem;\n\t\tfont-weight: bold;\n\t\tcolor: white;\n\t\tbackground-color: #0066cc;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.2s;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0052a3;\n\t}\n\n\tbutton:active {\n\t\tbackground-color: #003d7a;\n\t}\n&lt;/style&gt;&quot;,
   &quot;desired_svelte_version&quot;: 5,
   &quot;filename&quot;: &quot;Counter.svelte&quot;
 }</pre>
@@ -841,15 +841,15 @@ Error: Section not found.</pre>
       <summary class="step-header">
         <span class="step-num">Step 4</span>
         <span class="line"></span>
-        <span class="tokens">15,229 tok</span>
-        <span class="output">(461↑)</span>
+        <span class="tokens">15,376 tok</span>
+        <span class="output">(523↑)</span>
         <span class="reason">tool-calls</span>
       </summary>
       <div class="step-content">
-        <div class="text">Great! The component is valid. Now let me write it to a file:</div><details class="tool">
+        <div class="text">Perfect! The component is valid. Now let me write it to a file:</div><details class="tool">
   <summary><span class="arrow">→</span> <span class="tool-name">ResultWrite</span></summary>
   <pre class="input">{
-  &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter: {count}&lt;/h1&gt;\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;-&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;+&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;Reset&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: Arial, sans-serif;\n\t}\n\n\th1 {\n\t\tfont-size: 3rem;\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1.25rem;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tbackground-color: #007bff;\n\t\tcolor: white;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.3s ease;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0056b3;\n\t}\n\n\tbutton:active {\n\t\ttransform: scale(0.98);\n\t}\n&lt;/style&gt;&quot;
+  &quot;content&quot;: &quot;&lt;script&gt;\n\tlet count = $state(0);\n\n\tfunction increment() {\n\t\tcount++;\n\t}\n\n\tfunction decrement() {\n\t\tcount--;\n\t}\n\n\tfunction reset() {\n\t\tcount = 0;\n\t}\n&lt;/script&gt;\n\n&lt;div class=\&quot;counter\&quot;&gt;\n\t&lt;h1&gt;Counter&lt;/h1&gt;\n\t&lt;p&gt;Current count: {count}&lt;/p&gt;\n\t\n\t&lt;div class=\&quot;buttons\&quot;&gt;\n\t\t&lt;button onclick={decrement}&gt;\n\t\t\tDecrease\n\t\t&lt;/button&gt;\n\t\t&lt;button onclick={increment}&gt;\n\t\t\tIncrease\n\t\t&lt;/button&gt;\n\t\t&lt;button onclick={reset}&gt;\n\t\t\tReset\n\t\t&lt;/button&gt;\n\t&lt;/div&gt;\n&lt;/div&gt;\n\n&lt;style&gt;\n\t.counter {\n\t\tdisplay: flex;\n\t\tflex-direction: column;\n\t\talign-items: center;\n\t\tjustify-content: center;\n\t\tmin-height: 100vh;\n\t\tgap: 2rem;\n\t\tfont-family: sans-serif;\n\t}\n\n\th1 {\n\t\tmargin: 0;\n\t\tcolor: #333;\n\t}\n\n\tp {\n\t\tfont-size: 2rem;\n\t\tfont-weight: bold;\n\t\tcolor: #0066cc;\n\t\tmargin: 0;\n\t}\n\n\t.buttons {\n\t\tdisplay: flex;\n\t\tgap: 1rem;\n\t}\n\n\tbutton {\n\t\tpadding: 0.75rem 1.5rem;\n\t\tfont-size: 1rem;\n\t\tfont-weight: bold;\n\t\tcolor: white;\n\t\tbackground-color: #0066cc;\n\t\tborder: none;\n\t\tborder-radius: 0.5rem;\n\t\tcursor: pointer;\n\t\ttransition: background-color 0.2s;\n\t}\n\n\tbutton:hover {\n\t\tbackground-color: #0052a3;\n\t}\n\n\tbutton:active {\n\t\tbackground-color: #003d7a;\n\t}\n&lt;/style&gt;&quot;
 }</pre>
 </details><details class="result ">
   <summary><span class="status success">✓</span> Output</summary>
@@ -877,11 +877,19 @@ Error: Section not found.</pre>
 &lt;/script&gt;
 
 &lt;div class=&quot;counter&quot;&gt;
-	&lt;h1&gt;Counter: {count}&lt;/h1&gt;
+	&lt;h1&gt;Counter&lt;/h1&gt;
+	&lt;p&gt;Current count: {count}&lt;/p&gt;
+	
 	&lt;div class=&quot;buttons&quot;&gt;
-		&lt;button onclick={decrement}&gt;-&lt;/button&gt;
-		&lt;button onclick={increment}&gt;+&lt;/button&gt;
-		&lt;button onclick={reset}&gt;Reset&lt;/button&gt;
+		&lt;button onclick={decrement}&gt;
+			Decrease
+		&lt;/button&gt;
+		&lt;button onclick={increment}&gt;
+			Increase
+		&lt;/button&gt;
+		&lt;button onclick={reset}&gt;
+			Reset
+		&lt;/button&gt;
 	&lt;/div&gt;
 &lt;/div&gt;
 
@@ -893,13 +901,19 @@ Error: Section not found.</pre>
 		justify-content: center;
 		min-height: 100vh;
 		gap: 2rem;
-		font-family: Arial, sans-serif;
+		font-family: sans-serif;
 	}
 
 	h1 {
-		font-size: 3rem;
 		margin: 0;
 		color: #333;
+	}
+
+	p {
+		font-size: 2rem;
+		font-weight: bold;
+		color: #0066cc;
+		margin: 0;
 	}
 
 	.buttons {
@@ -909,21 +923,22 @@ Error: Section not found.</pre>
 
 	button {
 		padding: 0.75rem 1.5rem;
-		font-size: 1.25rem;
+		font-size: 1rem;
+		font-weight: bold;
+		color: white;
+		background-color: #0066cc;
 		border: none;
 		border-radius: 0.5rem;
-		background-color: #007bff;
-		color: white;
 		cursor: pointer;
-		transition: background-color 0.3s ease;
+		transition: background-color 0.2s;
 	}
 
 	button:hover {
-		background-color: #0056b3;
+		background-color: #0052a3;
 	}
 
 	button:active {
-		transform: scale(0.98);
+		background-color: #003d7a;
 	}
 &lt;/style&gt;</pre>
     </section>
