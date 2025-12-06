@@ -1,0 +1,22 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 20ede4e4818ff1ef2ac79b3e0bd3b43f7962b147..2af9321d12cf56b3f61c7ab57808b51e88031134 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1350,7 +1350,7 @@ var HttpMCPTransport = class {
+                 const { done, value } = await reader.read();
+                 if (done) return;
+                 const { event, data } = value;
+-                if (event === "message") {
++                if (!event || event === "message") {
+                   try {
+                     const msg = JSONRPCMessageSchema.parse(JSON.parse(data));
+                     (_a4 = this.onmessage) == null ? void 0 : _a4.call(this, msg);
+@@ -1475,7 +1475,7 @@ var HttpMCPTransport = class {
+             if (id) {
+               this.lastInboundEventId = id;
+             }
+-            if (event === "message") {
++            if (!event || event === "message") {
+               try {
+                 const msg = JSONRPCMessageSchema.parse(JSON.parse(data));
+                 (_a4 = this.onmessage) == null ? void 0 : _a4.call(this, msg);

@@ -1,4 +1,5 @@
 import { Experimental_Agent as Agent, stepCountIs, tool } from "ai";
+import { experimental_createMCPClient as createMCPClient } from "@ai-sdk/mcp";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { writeFileSync } from "node:fs";
@@ -12,6 +13,13 @@ const mcp_client = await createMCPClient({
   },
 });
 */
+
+const mcp_client = await createMCPClient({
+  transport: {
+    type: "stdio",
+    url: "https://mcp.svelte.dev/mcp",
+  },
+});
 
 const svelte_agent = new Agent({
   model: anthropic("claude-haiku-4-5"),
