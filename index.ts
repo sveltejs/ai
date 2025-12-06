@@ -1,35 +1,25 @@
-import { type ModelMessage, streamText } from "ai";
+import { Experimental_Agent as Agent, stepCountIs } from "ai";
+import { experimental_createMCPClient as createMCPClient } from "@ai-sdk/mcp";
 import { anthropic } from "@ai-sdk/anthropic";
-import * as readline from "node:readline/promises";
+import { writeFileSync } from "node:fs";
 
-const terminal = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
+/*
+const mcp_client = await createMCPClient({
+  transport: {
+    type: "http",
+    url: "https://mcp.svelte.dev/mcp",
+  },
+});
+*/
+
+const svelte_agent = new Agent({
+  model: anthropic("claude-haiku-4-5"),
+  // tools: await mcp_client.tools(),
+  stopWhen: stepCountIs(2),
 });
 
-const messages: ModelMessage[] = [];
+const result = await svelte_agent.generate({
+  prompt: "Can you build a counter component in svelte?",
+});
 
-async function main() {
-  while (true) {
-    const userInput = await terminal.question("You: ");
-
-    messages.push({ role: "user", content: userInput });
-
-    const result = streamText({
-      model: anthropic("claude-sonnet-4-5"),
-      messages,
-    });
-
-    let fullResponse = "";
-    process.stdout.write("\nAssistant: ");
-    for await (const delta of result.textStream) {
-      fullResponse += delta;
-      process.stdout.write(delta);
-    }
-    process.stdout.write("\n\n");
-
-    messages.push({ role: "assistant", content: fullResponse });
-  }
-}
-
-main().catch(console.error);
+writeFileSync("result.json", JSON.stringify(result, null, 2));
