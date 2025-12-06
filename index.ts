@@ -1,7 +1,7 @@
 import { Experimental_Agent as Agent, stepCountIs } from "ai";
-import { experimental_createMCPClient as createMCPClient } from "@ai-sdk/mcp";
 import { anthropic } from "@ai-sdk/anthropic";
 import { writeFileSync } from "node:fs";
+import { generateReport } from "./lib/report.ts";
 
 /*
 const mcp_client = await createMCPClient({
@@ -23,3 +23,6 @@ const result = await svelte_agent.generate({
 });
 
 writeFileSync("result.json", JSON.stringify(result, null, 2));
+
+// Generate HTML report
+await generateReport("result.json", "results/result.html");

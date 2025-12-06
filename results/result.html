@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI SDK Benchmark Results</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      color: #333;
+      background-color: #f5f5f5;
+      padding: 1rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+      font-size: 1.75rem;
+    }
+
+    .step {
+      background: white;
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .step-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .step-header h2 {
+      color: #2563eb;
+      font-size: 1.25rem;
+    }
+
+    .timestamp {
+      color: #666;
+      font-size: 0.85rem;
+    }
+
+    .metadata {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+
+    .meta-item {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .meta-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .meta-value {
+      color: #333;
+    }
+
+    .usage {
+      display: flex;
+      gap: 1.5rem;
+      padding: 0.75rem;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+
+    .usage-item {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .usage-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .usage-value {
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    .section {
+      margin-bottom: 1rem;
+    }
+
+    .section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section h3 {
+      color: #1a1a1a;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+    }
+
+    .content {
+      padding: 0.75rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .user-content {
+      background-color: #f0f9ff;
+      border-left: 3px solid #2563eb;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+
+    .assistant-content {
+      background-color: #fafafa;
+      border-left: 3px solid #16a34a;
+    }
+
+    .assistant-content p {
+      margin-bottom: 0.75rem;
+    }
+
+    .assistant-content h1,
+    .assistant-content h2,
+    .assistant-content h3 {
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .assistant-content h1 {
+      font-size: 1.35rem;
+    }
+
+    .assistant-content h2 {
+      font-size: 1.2rem;
+    }
+
+    .assistant-content h3 {
+      font-size: 1.05rem;
+    }
+
+    .assistant-content pre {
+      background-color: #1e293b;
+      padding: 0.75rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+
+    .assistant-content pre code {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+      background: none;
+      padding: 0;
+    }
+
+    .assistant-content p code {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.85rem;
+      background-color: #e5e7eb;
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
+      color: #dc2626;
+    }
+
+    .assistant-content ul {
+      margin-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .assistant-content li {
+      margin-bottom: 0.35rem;
+    }
+
+    .assistant-content strong {
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 0.75rem;
+      }
+
+      .step {
+        padding: 1rem;
+      }
+
+      .metadata,
+      .usage {
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI SDK Benchmark Results</h1>
+    
+        <div class="step">
+          <div class="step-header">
+            <h2>Step 1</h2>
+            <span class="timestamp">Dec 6, 2025 at 02:47:46 AM</span>
+          </div>
+
+          <div class="metadata">
+            <div class="meta-item">
+              <span class="meta-label">Model:</span>
+              <span class="meta-value">claude-haiku-4-5-20251001</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Finish Reason:</span>
+              <span class="meta-value">stop</span>
+            </div>
+          </div>
+
+          <div class="usage">
+            <div class="usage-item">
+              <span class="usage-label">Input Tokens:</span>
+              <span class="usage-value">17</span>
+            </div>
+            <div class="usage-item">
+              <span class="usage-label">Output Tokens:</span>
+              <span class="usage-value">824</span>
+            </div>
+            <div class="usage-item">
+              <span class="usage-label">Total Tokens:</span>
+              <span class="usage-value">841</span>
+            </div>
+            
+          </div>
+
+          <div class="section">
+            <h3>User Prompt</h3>
+            <div class="content user-content">
+              Can you build a counter component in svelte?
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Assistant Response</h3>
+            <div class="content assistant-content">
+              <h1>Svelte Counter Component</h1><p>Here's a simple counter component:</p><pre><code>&lt;script&gt;
+  let count = 0;</p><p>  function increment() {
+    count++;
+  }</p><p>  function decrement() {
+    count--;
+  }</p><p>  function reset() {
+    count = 0;
+  }
+&lt;/script&gt;</p><p>&lt;div class=&quot;counter&quot;&gt;
+  &lt;h1&gt;Counter: {count}&lt;/h1&gt;
+  
+  &lt;div class=&quot;buttons&quot;&gt;
+    &lt;button on:click={decrement}&gt;Decrement&lt;/button&gt;
+    &lt;button on:click={increment}&gt;Increment&lt;/button&gt;
+    &lt;button on:click={reset}&gt;Reset&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</p><p>&lt;style&gt;
+  .counter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    padding: 2rem;
+  }</p><p>  h1 {
+    font-size: 2rem;
+    color: #333;
+  }</p><p>  .buttons {
+    display: flex;
+    gap: 1rem;
+  }</p><p>  button {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    transition: background-color 0.3s;
+  }</p><p>  button:hover {
+    background-color: #0056b3;
+  }</p><p>  button:active {
+    transform: scale(0.98);
+  }
+&lt;/style&gt;</code></pre><h2>Alternative: More Compact Version</h2><pre><code>&lt;script&gt;
+  let count = 0;
+&lt;/script&gt;</p><p>&lt;div class=&quot;counter&quot;&gt;
+  &lt;button on:click={() =&gt; count--}&gt;-&lt;/button&gt;
+  &lt;span&gt;{count}&lt;/span&gt;
+  &lt;button on:click={() =&gt; count++}&gt;+&lt;/button&gt;
+&lt;/div&gt;</p><p>&lt;style&gt;
+  .counter {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }</p><p>  button {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }</p><p>  span {
+    font-size: 1.5rem;
+    min-width: 50px;
+    text-align: center;
+  }
+&lt;/style&gt;</code></pre><h2>With Props (Reusable)</h2><pre><code>&lt;script&gt;
+  export let initialValue = 0;
+  export let step = 1;
+  
+  let count = initialValue;
+&lt;/script&gt;</p><p>&lt;div class=&quot;counter&quot;&gt;
+  &lt;button on:click={() =&gt; count -= step}&gt;-{step}&lt;/button&gt;
+  &lt;span&gt;{count}&lt;/span&gt;
+  &lt;button on:click={() =&gt; count += step}&gt;+{step}&lt;/button&gt;
+&lt;/div&gt;</p><p>&lt;!-- Usage in parent component --&gt;
+&lt;!-- &lt;Counter initialValue={10} step={5} /&gt; --&gt;</code></pre><h2>Key Svelte Features Used</h2><ul><li><strong>Reactive variables</strong>: <code>let count = 0</code> automatically updates the DOM</li>
+<li><strong>Event handlers</strong>: <code>on:click</code> directive</li>
+<li><strong>Scoped styles</strong>: CSS is automatically scoped to the component</li>
+<li><strong>Exported props</strong>: <code>export let</code> makes values configurable</li></ul><p>Choose the version that best fits your needs! The first is most feature-rich, the second is minimal, and the third is most reusable.</p>
+            </div>
+          </div>
+        </div>
+      
+  </div>
+</body>
+</html>
