@@ -1,10 +1,32 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 // Type definitions for result.json structure
-interface ContentBlock {
+interface TextBlock {
   type: "text";
   text: string;
 }
+
+interface ToolCallBlock {
+  type: "tool-call";
+  toolCallId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  dynamic?: boolean;
+}
+
+interface ToolResultBlock {
+  type: "tool-result";
+  toolCallId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  output: {
+    content: Array<{ type: string; text?: string; [key: string]: unknown }>;
+    isError?: boolean;
+  };
+  dynamic?: boolean;
+}
+
+type ContentBlock = TextBlock | ToolCallBlock | ToolResultBlock;
 
 interface Message {
   role: "user" | "assistant";
@@ -81,6 +103,56 @@ function formatTimestamp(timestamp: string): string {
 }
 
 /**
+ * Render a single content block based on its type
+ */
+function renderContentBlock(block: ContentBlock): string {
+  if (block.type === "text") {
+    return `<div class="text-block">${escapeHtml(block.text)}</div>`;
+  } else if (block.type === "tool-call") {
+    const inputJson = JSON.stringify(block.input, null, 2);
+    return `
+      <div class="tool-call-block">
+        <div class="tool-header">
+          <span class="tool-icon">🔧</span>
+          <span class="tool-name">${escapeHtml(block.toolName)}</span>
+          <span class="tool-id">${escapeHtml(block.toolCallId)}</span>
+        </div>
+        <details class="tool-input">
+          <summary>Input Parameters</summary>
+          <pre>${escapeHtml(inputJson)}</pre>
+        </details>
+      </div>
+    `;
+  } else if (block.type === "tool-result") {
+    const inputJson = JSON.stringify(block.input, null, 2);
+    const outputText = block.output?.content
+      ? block.output.content
+          .map((c) => c.text || JSON.stringify(c))
+          .join("\n")
+      : "No output";
+    const isError = block.output?.isError || false;
+    return `
+      <div class="tool-result-block ${isError ? "error" : ""}">
+        <div class="tool-header">
+          <span class="tool-icon">${isError ? "❌" : "✓"}</span>
+          <span class="tool-name">${escapeHtml(block.toolName)}</span>
+          <span class="tool-id">${escapeHtml(block.toolCallId)}</span>
+        </div>
+        <details class="tool-input">
+          <summary>Input Parameters</summary>
+          <pre>${escapeHtml(inputJson)}</pre>
+        </details>
+        <details class="tool-output">
+          <summary>Output</summary>
+          <pre>${escapeHtml(outputText)}</pre>
+        </details>
+      </div>
+    `;
+  }
+  return "";
+}
+
+/**
  * Generate HTML report from result data
  */
 function generateHtml(data: ResultData): string {
@@ -89,8 +161,14 @@ function generateHtml(data: ResultData): string {
       const userMessage = step.request.body.messages.find(
         (m) => m.role === "user"
       );
-      const userPrompt = (userMessage?.content[0]?.text || "No prompt").trim();
-      const assistantResponse = (step.content[0]?.text || "No response").trim();
+      const userContentHtml = userMessage?.content
+        .map((block) => renderContentBlock(block))
+        .join("") || "<div class=\"text-block\">No prompt</div>";
+
+      const assistantContentHtml = step.content
+        .map((block) => renderContentBlock(block))
+        .join("") || "<div class=\"text-block\">No response</div>";
+
       const timestamp = formatTimestamp(step.response.timestamp);
 
       return `
@@ -136,14 +214,12 @@ function generateHtml(data: ResultData): string {
 
           <div class="section">
             <h3>User Prompt</h3>
-            <div class="content user-content">${escapeHtml(userPrompt)}</div>
+            <div class="content user-content">${userContentHtml}</div>
           </div>
 
           <div class="section">
             <h3>Assistant Response</h3>
-            <div class="content assistant-content">${escapeHtml(
-              assistantResponse
-            )}</div>
+            <div class="content assistant-content">${assistantContentHtml}</div>
           </div>
         </div>
       `;
@@ -318,6 +394,111 @@ function generateHtml(data: ResultData): string {
 
     .result-write .step-header h2 {
       color: #f59e0b;
+    }
+
+    /* Tool block styles */
+    .text-block {
+      white-space: pre-wrap;
+    }
+
+    .tool-call-block,
+    .tool-result-block {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 0.75rem;
+      margin: 0.75rem 0;
+    }
+
+    .tool-call-block {
+      border-left: 3px solid #3b82f6;
+    }
+
+    .tool-result-block {
+      border-left: 3px solid #10b981;
+    }
+
+    .tool-result-block.error {
+      border-left-color: #ef4444;
+      background-color: #fef2f2;
+    }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .tool-icon {
+      font-size: 1rem;
+    }
+
+    .tool-name {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .tool-id {
+      font-size: 0.75rem;
+      color: #64748b;
+      font-family: monospace;
+    }
+
+    .tool-input {
+      margin-top: 0.5rem;
+      cursor: pointer;
+    }
+
+    .tool-input summary {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #475569;
+      padding: 0.25rem 0;
+      user-select: none;
+    }
+
+    .tool-input summary:hover {
+      color: #1e293b;
+    }
+
+    .tool-input pre {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background-color: #f1f5f9;
+      border-radius: 3px;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    }
+
+    .tool-output {
+      margin-top: 0.5rem;
+      cursor: pointer;
+    }
+
+    .tool-output summary {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #475569;
+      padding: 0.25rem 0;
+      user-select: none;
+    }
+
+    .tool-output summary:hover {
+      color: #1e293b;
+    }
+
+    .tool-output pre {
+      margin-top: 0.5rem;
+      padding: 0.5rem;
+      background-color: #f1f5f9;
+      border-radius: 3px;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
     }
 
     @media (max-width: 768px) {
