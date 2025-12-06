@@ -203,7 +203,7 @@ function generateHtml(data: ResultData): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI SDK Benchmark Results</title>
+  <title>SvelteBench 2.0</title>
   <style>
     :root {
       --bg: #f8f8f8;
@@ -250,6 +250,7 @@ function generateHtml(data: ResultData): string {
     header {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 12px;
       margin-bottom: 12px;
       display: flex;
@@ -271,6 +272,7 @@ function generateHtml(data: ResultData): string {
     .theme-toggle {
       background: none;
       border: 1px solid var(--border);
+      border-radius: 3px;
       color: var(--text);
       cursor: pointer;
       padding: 4px 8px;
@@ -284,6 +286,7 @@ function generateHtml(data: ResultData): string {
     .step {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       margin-bottom: 8px;
     }
 
@@ -344,6 +347,7 @@ function generateHtml(data: ResultData): string {
     .result {
       margin: 8px 0;
       border: 1px solid var(--border);
+      border-radius: 3px;
     }
 
     .tool summary,
@@ -400,6 +404,7 @@ function generateHtml(data: ResultData): string {
     .result-write {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 12px;
     }
 
@@ -413,6 +418,7 @@ function generateHtml(data: ResultData): string {
       padding: 8px;
       background: var(--bg);
       border: 1px solid var(--border);
+      border-radius: 3px;
       overflow-x: auto;
       font-size: 12px;
       white-space: pre-wrap;
@@ -428,7 +434,7 @@ function generateHtml(data: ResultData): string {
 <body>
   <header>
     <div>
-      <h1>AI SDK Benchmark</h1>
+      <h1>SvelteBench 2.0</h1>
       <div class="meta">${summary.model} · ${summary.stepCount} steps · ${summary.totalTokens.toLocaleString()} tokens · ${summary.timestamp}</div>
     </div>
     <button class="theme-toggle" onclick="toggleTheme()">◐</button>

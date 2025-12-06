@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI SDK Benchmark Results</title>
+  <title>SvelteBench 2.0</title>
   <style>
     :root {
       --bg: #f8f8f8;
@@ -50,6 +50,7 @@
     header {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 12px;
       margin-bottom: 12px;
       display: flex;
@@ -71,6 +72,7 @@
     .theme-toggle {
       background: none;
       border: 1px solid var(--border);
+      border-radius: 3px;
       color: var(--text);
       cursor: pointer;
       padding: 4px 8px;
@@ -84,6 +86,7 @@
     .step {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       margin-bottom: 8px;
     }
 
@@ -144,6 +147,7 @@
     .result {
       margin: 8px 0;
       border: 1px solid var(--border);
+      border-radius: 3px;
     }
 
     .tool summary,
@@ -200,6 +204,7 @@
     .result-write {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 12px;
     }
 
@@ -213,6 +218,7 @@
       padding: 8px;
       background: var(--bg);
       border: 1px solid var(--border);
+      border-radius: 3px;
       overflow-x: auto;
       font-size: 12px;
       white-space: pre-wrap;
@@ -228,7 +234,7 @@
 <body>
   <header>
     <div>
-      <h1>AI SDK Benchmark</h1>
+      <h1>SvelteBench 2.0</h1>
       <div class="meta">claude-haiku-4-5-20251001 · 4 steps · 42,302 tokens · Dec 6, 2025 at 03:28:27 AM</div>
     </div>
     <button class="theme-toggle" onclick="toggleTheme()">◐</button>
