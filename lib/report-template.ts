@@ -96,10 +96,8 @@ function renderContentBlock(block: ContentBlock): string {
   <pre class="input">${escapeHtml(inputJson)}</pre>
 </details>`;
   } else if (block.type === "tool-result") {
-    const outputText = block.output?.content
-      ? block.output.content.map((c) => c.text || JSON.stringify(c)).join("\n")
-      : "No output";
-    const isError = block.output?.isError || false;
+    const outputText = JSON.stringify(block.output, null, 2);
+    const isError = block.output && typeof block.output === "object" && "error" in block.output;
     const statusIcon = isError ? "✗" : "✓";
     return `<details class="result ${isError ? "error" : ""}">
   <summary><span class="status ${isError ? "error" : "success"}">${statusIcon}</span> Output</summary>
@@ -285,7 +283,9 @@ export function generateMultiTestHtml(data: MultiTestResultData): string {
   );
 
   const mcpBadge = metadata.mcpEnabled
-    ? `<span class="mcp-badge enabled">MCP: ${escapeHtml(metadata.mcpServerUrl || "")}</span>`
+    ? metadata.mcpTransportType === "StdIO"
+      ? `<span class="mcp-badge enabled">MCP ✓ (StdIO: ${escapeHtml(metadata.mcpServerUrl || "")})</span>`
+      : `<span class="mcp-badge enabled">MCP ✓ (${escapeHtml(metadata.mcpServerUrl || "")})</span>`
     : `<span class="mcp-badge disabled">MCP ✗</span>`;
 
   const mcpNotice = !metadata.mcpEnabled
