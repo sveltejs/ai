@@ -277,7 +277,7 @@ export function printSummary(results: TestResult[]): void {
     if (!result.passed && result.failedTests && result.failedTests.length > 0) {
       console.log("  Failed tests:");
       for (const failed of result.failedTests) {
-        console.log(`    ✗ ${failed.fullName}`);
+        console.log(`✗ ${failed.fullName}`);
       }
     }
   }
@@ -330,12 +330,12 @@ export async function verifyAllReferences(): Promise<number> {
         if (result.failedTests && result.failedTests.length > 0) {
           console.log("\n  Failed tests:");
           for (const failed of result.failedTests) {
-            console.log(`    ✗ ${failed.fullName}`);
+            console.log(`✗ ${failed.fullName}`);
             // Print error message with indentation
             const errorLines = failed.errorMessage.split("\n");
             for (const line of errorLines) {
               if (line.trim()) {
-                console.log(`      ${line}`);
+                console.log(` ${line}`);
               }
             }
           }

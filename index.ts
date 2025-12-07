@@ -1,8 +1,4 @@
-import {
-  Experimental_Agent as Agent,
-  hasToolCall,
-  stepCountIs,
-} from "ai";
+import { Experimental_Agent as Agent, hasToolCall, stepCountIs } from "ai";
 import { experimental_createMCPClient as createMCPClient } from "./node_modules/@ai-sdk/mcp/dist/index.mjs";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import {
@@ -134,7 +130,7 @@ async function runSingleTest(
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
-          console.log(`    - ${ft.fullName}`);
+          console.log(`- ${ft.fullName}`);
         }
       }
     }
@@ -186,7 +182,9 @@ async function main() {
   if (mcpEnabled) {
     console.log(`MCP Server URL: ${mcpServerUrl}`);
   }
-  console.log(`TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`);
+  console.log(
+    `TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
+  );
 
   // Discover all tests
   console.log("\n📁 Discovering tests...");

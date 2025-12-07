@@ -11,11 +11,13 @@ export function testComponentTool(test: TestDefinition) {
     description:
       "Test your Svelte component against the test suite. Use this to verify your implementation and get feedback on any failing tests before submitting with ResultWrite. Returns detailed information about which tests passed or failed.",
     inputSchema: z.object({
-      content: z.string().describe("The complete Svelte component code to test"),
+      content: z
+        .string()
+        .describe("The complete Svelte component code to test"),
     }),
     execute: async ({ content }) => {
       const lines = content.split("\n").length;
-      console.log(`    [TestComponent] Testing ${lines} lines of code...`);
+      console.log(`[TestComponent] Testing ${lines} lines of code...`);
 
       try {
         const result = await runTestVerification(test, content);
@@ -24,9 +26,7 @@ export function testComponentTool(test: TestDefinition) {
         cleanupTestEnvironment(test.name);
 
         if (result.passed) {
-          console.log(
-            `    [TestComponent] ✓ All ${result.numTests} tests passed`,
-          );
+          console.log(`[TestComponent] ✓ All ${result.numTests} tests passed`);
           return {
             success: true,
             message: `All ${result.numTests} tests passed!`,
@@ -37,7 +37,7 @@ export function testComponentTool(test: TestDefinition) {
           };
         } else {
           console.log(
-            `    [TestComponent] ✗ ${result.numFailed}/${result.numTests} tests failed`,
+            `[TestComponent] ✗ ${result.numFailed}/${result.numTests} tests failed`,
           );
           return {
             success: false,
@@ -56,7 +56,7 @@ export function testComponentTool(test: TestDefinition) {
       } catch (error) {
         // Ensure cleanup even on error
         cleanupTestEnvironment(test.name);
-        console.log(`    [TestComponent] ✗ Error running tests`);
+        console.log(`[TestComponent] ✗ Error running tests`);
         return {
           success: false,
           message: "Failed to run tests",

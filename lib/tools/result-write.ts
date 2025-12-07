@@ -9,7 +9,7 @@ export const resultWriteTool = tool({
   }),
   execute: async ({ content }) => {
     const lines = content.split("\n").length;
-    console.log(`    [ResultWrite] Received ${lines} lines of code`);
+    console.log(`[ResultWrite] Received ${lines} lines of code`);
     return { success: true };
   },
 });
