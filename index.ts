@@ -2,10 +2,8 @@ import {
   Experimental_Agent as Agent,
   hasToolCall,
   stepCountIs,
-  tool,
 } from "ai";
 import { experimental_createMCPClient as createMCPClient } from "./node_modules/@ai-sdk/mcp/dist/index.mjs";
-import { z } from "zod";
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import {
   generateReport,
@@ -23,8 +21,8 @@ import {
   cleanupOutputsDirectory,
   cleanupTestEnvironment,
   runTestVerification,
-  type TestVerificationResult,
 } from "./lib/output-test-runner.ts";
+import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
 import type { LanguageModel } from "ai";
 
 /**
@@ -69,108 +67,6 @@ function extractResultWriteContent(steps: unknown[]): string | null {
 }
 
 /**
- * Create a TestComponent tool for a specific test definition
- * This tool allows the agent to test its component before submitting
- */
-function createTestComponentTool(test: TestDefinition) {
-  return tool({
-    description:
-      "Test your Svelte component against the test suite. Use this to verify your implementation and get feedback on any failing tests before submitting with ResultWrite. Returns detailed information about which tests passed or failed.",
-    inputSchema: z.object({
-      content: z.string().describe("The complete Svelte component code to test"),
-    }),
-    execute: async ({ content }) => {
-      const lines = content.split("\n").length;
-      console.log(`    [TestComponent] Testing ${lines} lines of code...`);
-
-      try {
-        const result = await runTestVerification(test, content);
-
-        // Clean up the test environment after running
-        cleanupTestEnvironment(test.name);
-
-        if (result.passed) {
-          console.log(
-            `    [TestComponent] ✓ All ${result.numTests} tests passed`,
-          );
-          return {
-            success: true,
-            message: `All ${result.numTests} tests passed!`,
-            passed: result.numPassed,
-            failed: result.numFailed,
-            total: result.numTests,
-            duration: result.duration,
-          };
-        } else {
-          console.log(
-            `    [TestComponent] ✗ ${result.numFailed}/${result.numTests} tests failed`,
-          );
-          return {
-            success: false,
-            message: `${result.numFailed} of ${result.numTests} tests failed`,
-            passed: result.numPassed,
-            failed: result.numFailed,
-            total: result.numTests,
-            duration: result.duration,
-            error: result.error,
-            failedTests: result.failedTests?.map((ft) => ({
-              name: ft.fullName,
-              error: ft.errorMessage,
-            })),
-          };
-        }
-      } catch (error) {
-        // Ensure cleanup even on error
-        cleanupTestEnvironment(test.name);
-        console.log(`    [TestComponent] ✗ Error running tests`);
-        return {
-          success: false,
-          message: "Failed to run tests",
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-  });
-}
-
-/**
- * Create tools object for a specific test
- */
-async function createToolsForTest(
-  test: TestDefinition,
-  mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null,
-  testComponentEnabled: boolean,
-): Promise<Record<string, any>> {
-  const tools: Record<string, any> = {
-    ResultWrite: tool({
-      description:
-        "Write your final Svelte component code. Call this when you have completed implementing the component and are ready to submit.",
-      inputSchema: z.object({
-        content: z.string().describe("The complete Svelte component code"),
-      }),
-      execute: async ({ content }) => {
-        const lines = content.split("\n").length;
-        console.log(`    [ResultWrite] Received ${lines} lines of code`);
-        return { success: true };
-      },
-    }),
-  };
-
-  // Add TestComponent tool if enabled
-  if (testComponentEnabled) {
-    tools.TestComponent = createTestComponentTool(test);
-  }
-
-  // Add MCP tools if available
-  if (mcpClient) {
-    const mcpTools = await mcpClient.tools();
-    Object.assign(tools, mcpTools);
-  }
-
-  return tools;
-}
-
-/**
  * Run a single test with the AI agent
  */
 async function runSingleTest(
@@ -187,8 +83,12 @@ async function runSingleTest(
   const prompt = buildAgentPrompt(test);
 
   try {
-    // Create tools specific to this test
-    const tools = await createToolsForTest(test, mcpClient, testComponentEnabled);
+    // Build tools object with conditional tools
+    const tools = {
+      ResultWrite: resultWriteTool,
+      ...(testComponentEnabled && { TestComponent: testComponentTool(test) }),
+      ...(mcpClient ? await mcpClient.tools() : {}),
+    };
 
     // Create agent for this test
     const agent = new Agent({
