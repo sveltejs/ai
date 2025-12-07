@@ -5,10 +5,15 @@
   "private": true,
   "scripts": {
     "postinstall": "patch-package",
-    "update": "bun update --interactive"
+    "update": "bun update --interactive",
+    "test": "bun run verify-references.ts",
+    "test:watch": "bun run vitest watch"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@testing-library/jest-dom": "^6.6.3",
     "@types/bun": "^1.3.3",
+    "jsdom": "^26.1.0",
     "patch-package": "^8.0.1"
   },
   "peerDependencies": {
@@ -19,7 +24,10 @@
     "@ai-sdk/mcp": "0.0.11",
     "@ai-sdk/openai": "^2.0.77",
     "@openrouter/ai-sdk-provider": "^1.4.1",
+    "@testing-library/svelte": "^5.2.9",
+    "@testing-library/user-event": "^14.6.1",
     "ai": "^5.0.108",
+    "vitest": "^4.0.15",
     "zod": "^4.1.13"
   }
 }
