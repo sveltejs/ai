@@ -271,7 +271,7 @@ export function printSummary(results: TestResult[]): void {
     console.log(`${result.testName}: ${status} (${testInfo}, ${durationInfo})`);
 
     if (result.error) {
-      console.log(`  Error: ${result.error}`);
+      console.log(`Error: ${result.error}`);
     }
 
     if (!result.passed && result.failedTests && result.failedTests.length > 0) {
@@ -319,13 +319,13 @@ export async function verifyAllReferences(): Promise<number> {
       results.push(result);
 
       if (result.passed) {
-        console.log(`  ✓ All tests passed (${result.duration}ms)`);
+        console.log(`✓ All tests passed (${result.duration}ms)`);
       } else {
         console.log(
-          `  ✗ Tests failed (${result.numFailed}/${result.numTests} failed)`,
+          `✗ Tests failed (${result.numFailed}/${result.numTests} failed)`,
         );
         if (result.error) {
-          console.log(`  Error: ${result.error}`);
+          console.log(`Error: ${result.error}`);
         }
         if (result.failedTests && result.failedTests.length > 0) {
           console.log("\n  Failed tests:");

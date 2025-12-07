@@ -122,11 +122,11 @@ async function runSingleTest(
 
     if (verification.passed) {
       console.log(
-        `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
+        `✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );
     } else {
       console.log(
-        `  ✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
+        `✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
@@ -146,7 +146,7 @@ async function runSingleTest(
       verification,
     };
   } catch (error) {
-    console.error(`  ✗ Error running test: ${error}`);
+    console.error(`✗ Error running test: ${error}`);
     return {
       testName: test.name,
       prompt: test.prompt,
@@ -260,7 +260,7 @@ async function main() {
         ? "PASSED"
         : "FAILED"
       : "SKIPPED";
-    console.log(`  ${status} ${result.testName}: ${statusText}`);
+    console.log( ${status} ${result.testName}: ${statusText}`);
   }
 
   console.log("─".repeat(50));
