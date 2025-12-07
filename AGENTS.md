@@ -11,6 +11,9 @@ bun install
 # Run the main benchmark
 bun run index.ts
 
+# Verify reference implementations against test suites
+bun run verify-tests
+
 # Generate HTML report from most recent result
 bun run generate-report.ts
 
@@ -124,6 +127,49 @@ This allows switching models and providers without any code changes.
   - Can specify a specific result file or automatically uses the most recent one
   - Usage: `bun run generate-report.ts [path/to/result.json]`
 
+- **`lib/verify-references.ts`**: Test verification system
+  - Discovers test suites in `tests/*/` directories
+  - For each test suite:
+    - Copies `Reference.svelte` → `Component.svelte`
+    - Runs vitest tests via CLI with JSON reporter
+    - Parses test results and collects failure details
+    - Cleans up `Component.svelte` after testing
+  - Provides detailed failure information including test names and error messages
+  - Generates summary report with pass/fail statistics
+  - Returns exit code 0 if all tests pass, 1 if any fail
+
+- **`verify-references.ts`**: Test verification entry point
+  - Entry point for verifying reference Svelte implementations
+  - Usage: `bun run verify-tests`
+
+### Test Suite Structure
+
+Test suites are organized in the `tests/` directory with the following structure:
+
+```
+tests/
+  {test-name}/
+    Reference.svelte  - Reference implementation of the component
+    test.ts          - Vitest test file (imports "./Component.svelte")
+    prompt.md        - Prompt for AI agents to implement the component
+```
+
+**Test Workflow:**
+1. AI agents read the `prompt.md` to understand requirements
+2. Agents generate `Component.svelte` based on the prompt
+3. Tests in `test.ts` verify the generated component works correctly
+4. Reference implementations in `Reference.svelte` serve as:
+   - Known-good implementations for verification
+   - Examples of correct solutions
+   - Validation that tests themselves are correct
+
+**Test Verification:**
+- Run `bun run verify-tests` to validate reference implementations
+- Each test file imports `Component.svelte` (not Reference.svelte directly)
+- Verification system temporarily copies Reference.svelte → Component.svelte
+- Tests use `@testing-library/svelte` for component testing
+- Tests use `data-testid` attributes for element selection
+
 ### Key Technologies
 
 - **Vercel AI SDK v5**: Agent framework with tool calling
@@ -132,6 +178,8 @@ This allows switching models and providers without any code changes.
 - **@openrouter/ai-sdk-provider**: OpenRouter provider for unified access to 300+ models
 - **@ai-sdk/mcp**: MCP client integration (with custom patch)
 - **Bun Runtime**: JavaScript runtime (not Node.js)
+- **Vitest**: Test framework for component testing
+- **@testing-library/svelte**: Testing utilities for Svelte components
 
 ### MCP Integration
 
