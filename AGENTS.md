@@ -31,12 +31,14 @@ bun tsc --noEmit
 The `MODEL` environment variable determines which AI provider to use:
 
 **Anthropic Direct API:**
+
 ```bash
 MODEL=anthropic/claude-haiku-4-5
 MODEL=anthropic/claude-sonnet-4
 ```
 
 **OpenAI Direct API:**
+
 ```bash
 MODEL=openai/gpt-5
 MODEL=openai/gpt-5-mini
@@ -44,6 +46,7 @@ MODEL=openai/gpt-4o
 ```
 
 **OpenRouter (300+ models):**
+
 ```bash
 MODEL=openrouter/anthropic/claude-sonnet-4
 MODEL=openrouter/google/gemini-pro
@@ -66,6 +69,7 @@ MCP_SERVER_URL=https://your-mcp-server.com/mcp
 ```
 
 **Behavior:**
+
 - If `MCP_SERVER_URL` is set and not empty: MCP tools are injected into the agent
 - If `MCP_SERVER_URL` is empty or not set: Agent runs without MCP tools (only built-in tools)
 - MCP status is documented in the result JSON and HTML report with a badge
@@ -79,6 +83,7 @@ MCP_SERVER_URL=https://your-mcp-server.com/mcp
 ### Provider Routing
 
 The benchmark tool automatically routes to the correct provider based on the `MODEL` prefix:
+
 - `anthropic/*` → Direct Anthropic API
 - `openai/*` → Direct OpenAI API
 - `openrouter/*` → OpenRouter unified API
@@ -86,89 +91,6 @@ The benchmark tool automatically routes to the correct provider based on the `MO
 This allows switching models and providers without any code changes.
 
 ## Architecture
-
-### Core Components
-
-- **`index.ts`**: Main benchmark entry point (Multi-Test Runner)
-
-  - Discovers all tests in `tests/` directory automatically
-  - Creates an AI agent using `Experimental_Agent` from Vercel AI SDK
-  - Uses smart provider routing based on `MODEL` environment variable
-  - Conditionally configures MCP client based on `MCP_SERVER_URL` environment variable
-  - For each discovered test:
-    - Loads the test prompt from `prompt.md`
-    - Runs the agent with the prompt
-    - Extracts the generated component from `ResultWrite` tool call
-    - Verifies the component against the test suite
-    - Collects results including pass/fail status
-  - Generates timestamped result files in `results/` directory
-  - Automatically opens HTML report in browser
-  - Returns exit code 0 if all tests pass, 1 if any fail
-
-- **`lib/test-discovery.ts`**: Test discovery and prompt loading
-
-  - Scans `tests/` directory for test suites
-  - Validates required files exist (Reference.svelte, test.ts, prompt.md)
-  - Loads prompt content for each test
-  - Provides structured `TestDefinition` objects
-  - Builds agent prompts with instructions to use `ResultWrite` tool
-
-- **`lib/output-test-runner.ts`**: Test verification system
-
-  - Manages the `outputs/` directory for temporary test files
-  - Writes LLM-generated components to `outputs/{test-name}/Component.svelte`
-  - Copies test files and runs vitest against generated components
-  - Parses test results and collects failure details
-  - Cleans up test artifacts after each run
-  - Returns detailed `TestVerificationResult` with pass/fail status
-
-- **`lib/providers.ts`**: Smart provider routing
-
-  - Loads environment configuration from `MODEL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`
-  - Routes to appropriate provider based on model prefix:
-    - `anthropic/*` → Direct Anthropic API
-    - `openai/*` → Direct OpenAI API
-    - `openrouter/*` → OpenRouter unified API
-  - Validates required API keys and provides clear error messages
-  - Returns configured language model instance
-
-- **`lib/report.ts`**: HTML report generation (Multi-Test Support)
-
-  - Supports new multi-test result format with expandable sections
-  - Parses result JSON files containing multiple test runs
-  - Renders detailed HTML visualization with:
-    - Summary bar showing passed/failed/skipped counts
-    - Expandable sections for each test
-    - Test prompts (collapsible)
-    - Agent steps with tool calls and responses
-    - Generated component code
-    - Test verification results with pass/fail details
-    - Failed test names and error messages
-    - Token usage statistics per step
-    - Timestamps and metadata
-    - MCP status badge (enabled/disabled with server URL)
-  - Backward compatible with legacy single-test format
-  - Auto-opens report in default browser
-
-- **`generate-report.ts`**: Standalone report generator
-  - Regenerates HTML reports from existing result JSON files
-  - Can specify a specific result file or automatically uses the most recent one
-  - Usage: `bun run generate-report.ts [path/to/result.json]`
-
-- **`lib/verify-references.ts`**: Reference implementation verification
-  - Discovers test suites in `tests/*/` directories
-  - For each test suite:
-    - Copies `Reference.svelte` → `Component.svelte`
-    - Runs vitest tests via CLI with JSON reporter
-    - Parses test results and collects failure details
-    - Cleans up `Component.svelte` after testing
-  - Provides detailed failure information including test names and error messages
-  - Generates summary report with pass/fail statistics
-  - Returns exit code 0 if all tests pass, 1 if any fail
-
-- **`verify-references.ts`**: Test verification entry point
-  - Entry point for verifying reference Svelte implementations
-  - Usage: `bun run verify-tests`
 
 ### Test Suite Structure
 
@@ -183,6 +105,7 @@ tests/
 ```
 
 **Benchmark Workflow:**
+
 1. `index.ts` discovers all test suites in `tests/`
 2. For each test:
    - Loads `prompt.md` and builds agent prompt
@@ -197,42 +120,12 @@ tests/
 4. HTML report is generated with expandable sections for each test
 
 **Reference Verification:**
+
 - Run `bun run verify-tests` to validate reference implementations
 - Each test file imports `Component.svelte` (not Reference.svelte directly)
 - Verification system temporarily copies Reference.svelte → Component.svelte
 - Tests use `@testing-library/svelte` for component testing
 - Tests use `data-testid` attributes for element selection
-
-### Directory Structure
-
-```
-.
-├── index.ts                    # Main multi-test benchmark entry point
-├── generate-report.ts          # Standalone report generator
-├── verify-references.ts        # Reference verification entry point
-├── lib/
-│   ├── providers.ts            # Smart provider routing
-│   ├── report.ts               # HTML report generation (multi-test)
-│   ├── test-discovery.ts       # Test discovery and prompt loading
-│   ├── output-test-runner.ts   # Test verification runner
-│   └── verify-references.ts    # Reference implementation verification
-├── tests/
-│   ├── counter/                # Counter component test
-│   │   ├── Reference.svelte
-│   │   ├── test.ts
-│   │   └── prompt.md
-│   ├── derived-by/             # $derived.by test
-│   │   ├── Reference.svelte
-│   │   ├── test.ts
-│   │   └── prompt.md
-│   └── snippets/               # Snippets test
-│       ├── Reference.svelte
-│       ├── test.ts
-│       └── prompt.md
-├── outputs/                    # Temporary test outputs (gitignored)
-├── results/                    # Benchmark results (JSON and HTML)
-└── patches/                    # MCP client patches
-```
 
 ### Key Technologies
 
@@ -279,6 +172,7 @@ All results are saved in the `results/` directory with timestamped filenames:
 - **HTML files**: `result-2024-12-07-14-30-45.html` - Interactive visualization with expandable test sections
 
 **Multi-Test Result JSON Structure:**
+
 ```json
 {
   "tests": [
@@ -309,6 +203,7 @@ All results are saved in the `results/` directory with timestamped filenames:
 ```
 
 This naming convention allows you to:
+
 - Run multiple benchmarks without overwriting previous results
 - Easily identify when each benchmark was run
 - Compare results across different runs
