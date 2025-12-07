@@ -44,11 +44,13 @@ MCP_SERVER_URL=https://mcp.svelte.dev/mcp
 ### Supported Providers
 
 **Cloud Providers:**
+
 - `anthropic/*` - Direct Anthropic API (requires `ANTHROPIC_API_KEY`)
 - `openai/*` - Direct OpenAI API (requires `OPENAI_API_KEY`)
 - `openrouter/*` - OpenRouter unified API (requires `OPENROUTER_API_KEY`)
 
 **Local Providers:**
+
 - `lmstudio/*` - LM Studio local server (requires LM Studio running on `http://localhost:1234`)
 
 Example configurations:

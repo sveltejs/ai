@@ -109,10 +109,44 @@ async function runSingleTest(
     };
 
     // Create agent for this test
+    let stepCounter = 0;
     const agent = new Agent({
       model,
       stopWhen: [hasToolCall("ResultWrite"), stepCountIs(10)],
       tools,
+      onStepFinish: (step) => {
+        if (process.env.VERBOSE_LOGGING !== "true") {
+          return;
+        }
+        stepCounter++;
+        console.log(`  Step ${stepCounter}:`);
+        if (step.text) {
+          const preview =
+            step.text.length > 100
+              ? step.text.slice(0, 100) + "..."
+              : step.text;
+          console.log(`💬 Text: ${preview}`);
+        }
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          for (const call of step.toolCalls) {
+            if (call) {
+              console.log(`🔧 Tool call: ${call.toolName}`);
+            }
+          }
+        }
+        if (step.toolResults && step.toolResults.length > 0) {
+          for (const result of step.toolResults) {
+            if (result && "output" in result) {
+              const resultStr = JSON.stringify(result.output);
+              const preview =
+                resultStr.length > 80
+                  ? resultStr.slice(0, 80) + "..."
+                  : resultStr;
+              console.log(`📤 Tool result: ${preview}`);
+            }
+          }
+        }
+      },
     });
 
     // Run the agent

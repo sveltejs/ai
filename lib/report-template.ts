@@ -97,7 +97,10 @@ function renderContentBlock(block: ContentBlock): string {
 </details>`;
   } else if (block.type === "tool-result") {
     const outputText = JSON.stringify(block.output, null, 2);
-    const isError = block.output && typeof block.output === "object" && "error" in block.output;
+    const isError =
+      block.output &&
+      typeof block.output === "object" &&
+      "error" in block.output;
     const statusIcon = isError ? "✗" : "✓";
     return `<details class="result ${isError ? "error" : ""}">
   <summary><span class="status ${isError ? "error" : "success"}">${statusIcon}</span> Output</summary>
@@ -180,8 +183,8 @@ function renderSteps(steps: Step[]): string {
       <summary class="step-header">
         <span class="step-num">Step ${index + 1}</span>
         <span class="line"></span>
-        <span class="tokens" title="Total tokens: ${step.usage.totalTokens.toLocaleString()}&#10;Input: ${inputTokens.toLocaleString()} (${uncachedInputTokens.toLocaleString()} new + ${cachedTokens.toLocaleString()} cached)&#10;Output: ${step.usage.outputTokens.toLocaleString()}">${step.usage.totalTokens.toLocaleString()} tok</span>
-        <span class="output" title="Output tokens generated: ${step.usage.outputTokens.toLocaleString()}&#10;${cachedTokens > 0 ? `Cached input tokens (⚡): ${cachedTokens.toLocaleString()} (not billed)` : "No cached tokens"}">(${step.usage.outputTokens.toLocaleString()}↑${cachedInfo})</span>
+        <span class="tokens" title="Total tokens: ${step.usage.totalTokens.toLocaleString()}&#10;Input: ${inputTokens.toLocaleString()} (${uncachedInputTokens.toLocaleString()} new + ${cachedTokens?.toLocaleString()} cached)&#10;Output: ${step.usage.outputTokens.toLocaleString()}">${step.usage.totalTokens.toLocaleString()} tok</span>
+        <span class="output" title="Output tokens generated: ${step.usage.outputTokens.toLocaleString()}&#10;${cachedTokens > 0 ? `Cached input tokens (⚡): ${cachedTokens?.toLocaleString()} (not billed)` : "No cached tokens"}">(${step.usage.outputTokens.toLocaleString()}↑${cachedInfo})</span>
         <span class="reason">${step.finishReason}</span>
       </summary>
       <div class="step-content">
@@ -217,7 +220,7 @@ function renderTestSection(test: SingleTestResult, index: number): string {
 
   // Generate unique ID for this test's component code
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
-  
+
   const resultWriteHtml = test.resultWriteContent
     ? `<div class="output-section">
         <div class="token-summary">
