@@ -35,6 +35,14 @@ export interface ModelPricingDisplay {
   cacheReadCostPerMTok?: number;
 }
 
+/**
+ * Result of looking up a model's pricing
+ */
+export interface ModelPricingLookup {
+  pricing: ModelPricing;
+  matchedKey: string;
+}
+
 // Cache the loaded pricing data
 let pricingData: Record<string, unknown> | null = null;
 
@@ -108,10 +116,10 @@ function normalizeModelForLookup(modelString: string): string[] {
 }
 
 /**
- * Get pricing information for a model
+ * Look up pricing information for a model, returning both the pricing and the matched key
  * Returns null if pricing is not found
  */
-export function getModelPricing(modelString: string): ModelPricing | null {
+export function lookupModelPricing(modelString: string): ModelPricingLookup | null {
   const data = loadPricingData();
   const candidates = normalizeModelForLookup(modelString);
 
@@ -123,16 +131,19 @@ export function getModelPricing(modelString: string): ModelPricing | null {
 
       if (typeof inputCost === "number" || typeof outputCost === "number") {
         return {
-          inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
-          outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
-          cacheReadInputTokenCost:
-            typeof modelData.cache_read_input_token_cost === "number"
-              ? modelData.cache_read_input_token_cost
-              : undefined,
-          cacheCreationInputTokenCost:
-            typeof modelData.cache_creation_input_token_cost === "number"
-              ? modelData.cache_creation_input_token_cost
-              : undefined,
+          pricing: {
+            inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
+            outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
+            cacheReadInputTokenCost:
+              typeof modelData.cache_read_input_token_cost === "number"
+                ? modelData.cache_read_input_token_cost
+                : undefined,
+            cacheCreationInputTokenCost:
+              typeof modelData.cache_creation_input_token_cost === "number"
+                ? modelData.cache_creation_input_token_cost
+                : undefined,
+          },
+          matchedKey: candidate,
         };
       }
     }
@@ -142,14 +153,56 @@ export function getModelPricing(modelString: string): ModelPricing | null {
 }
 
 /**
+ * Get pricing information for a model using an explicit key
+ * Returns null if pricing is not found
+ */
+export function lookupModelPricingByKey(pricingKey: string): ModelPricingLookup | null {
+  const data = loadPricingData();
+  const modelData = data[pricingKey] as Record<string, unknown> | undefined;
+
+  if (!modelData) {
+    return null;
+  }
+
+  const inputCost = modelData.input_cost_per_token;
+  const outputCost = modelData.output_cost_per_token;
+
+  if (typeof inputCost === "number" || typeof outputCost === "number") {
+    return {
+      pricing: {
+        inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
+        outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
+        cacheReadInputTokenCost:
+          typeof modelData.cache_read_input_token_cost === "number"
+            ? modelData.cache_read_input_token_cost
+            : undefined,
+        cacheCreationInputTokenCost:
+          typeof modelData.cache_creation_input_token_cost === "number"
+            ? modelData.cache_creation_input_token_cost
+            : undefined,
+      },
+      matchedKey: pricingKey,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Get pricing information for a model (legacy function for compatibility)
+ * Returns null if pricing is not found
+ */
+export function getModelPricing(modelString: string): ModelPricing | null {
+  const lookup = lookupModelPricing(modelString);
+  return lookup?.pricing ?? null;
+}
+
+/**
  * Get pricing display information (cost per million tokens)
  */
 export function getModelPricingDisplay(
-  modelString: string,
-): ModelPricingDisplay | null {
-  const pricing = getModelPricing(modelString);
-  if (!pricing) return null;
-
+  pricing: ModelPricing,
+): ModelPricingDisplay {
   return {
     inputCostPerMTok: pricing.inputCostPerToken * 1_000_000,
     outputCostPerMTok: pricing.outputCostPerToken * 1_000_000,
@@ -163,14 +216,11 @@ export function getModelPricingDisplay(
  * Calculate the cost for given token usage
  */
 export function calculateCost(
-  modelString: string,
+  pricing: ModelPricing,
   inputTokens: number,
   outputTokens: number,
   cachedInputTokens: number = 0,
-): CostCalculation | null {
-  const pricing = getModelPricing(modelString);
-  if (!pricing) return null;
-
+): CostCalculation {
   // For cached tokens, we subtract them from input tokens for billing purposes
   // and bill them at the cache read rate (if available, otherwise free)
   const uncachedInputTokens = inputTokens - cachedInputTokens;
@@ -221,4 +271,12 @@ export function formatMTokCost(costPerMTok: number): string {
  */
 export function isPricingAvailable(): boolean {
   return existsSync(PRICING_FILE_PATH);
+}
+
+/**
+ * Get all available model keys (for debugging/listing)
+ */
+export function getAllModelKeys(): string[] {
+  const data = loadPricingData();
+  return Object.keys(data).filter((key) => key !== "sample_spec");
 }

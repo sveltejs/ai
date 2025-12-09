@@ -23,10 +23,14 @@ import {
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
 import {
+  lookupModelPricing,
+  lookupModelPricingByKey,
   getModelPricingDisplay,
   calculateCost,
   formatCost,
   isPricingAvailable,
+  type ModelPricing,
+  type ModelPricingLookup,
 } from "./lib/pricing.ts";
 import type { LanguageModel } from "ai";
 
@@ -97,8 +101,8 @@ function extractResultWriteContent(steps: unknown[]): string | null {
  */
 function calculateTotalCost(
   tests: SingleTestResult[],
-  modelString: string,
-): TotalCostInfo | null {
+  pricing: ModelPricing,
+): TotalCostInfo {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCachedInputTokens = 0;
@@ -112,13 +116,11 @@ function calculateTotalCost(
   }
 
   const costResult = calculateCost(
-    modelString,
+    pricing,
     totalInputTokens,
     totalOutputTokens,
     totalCachedInputTokens,
   );
-
-  if (!costResult) return null;
 
   return {
     inputCost: costResult.inputCost,
@@ -129,6 +131,69 @@ function calculateTotalCost(
     outputTokens: totalOutputTokens,
     cachedInputTokens: totalCachedInputTokens,
   };
+}
+
+/**
+ * Resolve pricing lookup based on environment variables
+ * Returns the pricing lookup result or null if disabled
+ * Throws an error if pricing cannot be found and is not disabled
+ */
+function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
+  const costDisabled = process.env.MODEL_COST_DISABLED === "true";
+  const explicitCostName = process.env.MODEL_COST_NAME;
+
+  // If cost calculation is explicitly disabled, return null
+  if (costDisabled) {
+    return null;
+  }
+
+  // Check if pricing data file exists
+  if (!isPricingAvailable()) {
+    console.error(
+      `\n✗ Model pricing file not found. Run 'bun run update-model-pricing' to download it.`,
+    );
+    console.error(
+      `  Or set MODEL_COST_DISABLED=true to skip cost calculation.\n`,
+    );
+    process.exit(1);
+  }
+
+  // If explicit cost name is provided, use that
+  if (explicitCostName) {
+    const lookup = lookupModelPricingByKey(explicitCostName);
+    if (!lookup) {
+      console.error(
+        `\n✗ Could not find pricing for MODEL_COST_NAME="${explicitCostName}" in model-pricing.json`,
+      );
+      console.error(
+        `  Check that the key exists in data/model-pricing.json.\n`,
+      );
+      process.exit(1);
+    }
+    return lookup;
+  }
+
+  // Try automatic lookup
+  const lookup = lookupModelPricing(modelString);
+  if (!lookup) {
+    console.error(
+      `\n✗ Could not find pricing for model "${modelString}" in model-pricing.json`,
+    );
+    console.error(`\n  Options:`);
+    console.error(
+      `    1. Set MODEL_COST_NAME=<key> to explicitly specify the pricing key`,
+    );
+    console.error(`       Example: MODEL_COST_NAME=claude-sonnet-4-20250514`);
+    console.error(
+      `    2. Set MODEL_COST_DISABLED=true to skip cost calculation`,
+    );
+    console.error(
+      `\n  Browse data/model-pricing.json to find the correct key for your model.\n`,
+    );
+    process.exit(1);
+  }
+
+  return lookup;
 }
 
 /**
@@ -281,10 +346,24 @@ async function main() {
   const isHttpTransport = mcpEnabled && isHttpUrl(mcpServerUrl);
   const mcpTransportType = isHttpTransport ? "HTTP" : "StdIO";
 
+  // Load environment configuration
+  const envConfig = loadEnvConfig();
+
   console.log("╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
-  console.log(`Model: ${process.env.MODEL}`);
+  console.log(`Model: ${envConfig.modelString}`);
+
+  // Resolve pricing lookup
+  const costDisabled = process.env.MODEL_COST_DISABLED === "true";
+  const pricingLookup = resolvePricingLookup(envConfig.modelString);
+
+  if (pricingLookup) {
+    console.log(`Pricing model mapped: ${pricingLookup.matchedKey}`);
+  } else if (costDisabled) {
+    console.log(`Pricing: Disabled (MODEL_COST_DISABLED=true)`);
+  }
+
   console.log(`MCP Integration: ${mcpEnabled ? "Enabled" : "Disabled"}`);
   if (mcpEnabled) {
     console.log(`MCP Transport: ${mcpTransportType}`);
@@ -297,10 +376,6 @@ async function main() {
   console.log(
     `TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
   );
-
-  // Check pricing availability
-  const hasPricing = isPricingAvailable();
-  console.log(`Pricing Data: ${hasPricing ? "Available" : "Not available (run 'bun run update-model-pricing' to download)"}`);
 
   // Discover all tests
   console.log("\n📁 Discovering tests...");
@@ -340,8 +415,7 @@ async function main() {
     }
   }
 
-  // Load environment configuration and get model provider
-  const envConfig = loadEnvConfig();
+  // Get model provider
   const model = getModelProvider(envConfig);
 
   // Run all tests
@@ -397,17 +471,31 @@ async function main() {
     `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
   );
 
-  // Calculate total cost
-  const totalCost = calculateTotalCost(testResults, envConfig.modelString);
-  const pricingDisplay = getModelPricingDisplay(envConfig.modelString);
+  // Calculate total cost if pricing is available
+  let totalCost: TotalCostInfo | null = null;
+  let pricingInfo: PricingInfo | null = null;
 
-  if (totalCost) {
+  if (pricingLookup) {
+    totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
+    const pricingDisplay = getModelPricingDisplay(pricingLookup.pricing);
+    pricingInfo = {
+      inputCostPerMTok: pricingDisplay.inputCostPerMTok,
+      outputCostPerMTok: pricingDisplay.outputCostPerMTok,
+      cacheReadCostPerMTok: pricingDisplay.cacheReadCostPerMTok,
+    };
+
     console.log("\n💰 Cost Summary");
     console.log("─".repeat(50));
-    console.log(`Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`);
-    console.log(`Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`);
+    console.log(
+      `Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`,
+    );
+    console.log(
+      `Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`,
+    );
     if (totalCost.cachedInputTokens > 0) {
-      console.log(`Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()} (${formatCost(totalCost.cacheReadCost)})`);
+      console.log(
+        `Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()} (${formatCost(totalCost.cacheReadCost)})`,
+      );
     }
     console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
   }
@@ -424,15 +512,6 @@ async function main() {
   const jsonPath = `${resultsDir}/${jsonFilename}`;
   const htmlPath = `${resultsDir}/${htmlFilename}`;
 
-  // Build pricing info for metadata
-  const pricing: PricingInfo | null = pricingDisplay
-    ? {
-        inputCostPerMTok: pricingDisplay.inputCostPerMTok,
-        outputCostPerMTok: pricingDisplay.outputCostPerMTok,
-        cacheReadCostPerMTok: pricingDisplay.cacheReadCostPerMTok,
-      }
-    : null;
-
   // Build the result data
   const resultData: MultiTestResultData = {
     tests: testResults,
@@ -442,7 +521,8 @@ async function main() {
       mcpTransportType: mcpEnabled ? mcpTransportType : null,
       timestamp: new Date().toISOString(),
       model: envConfig.modelString,
-      pricing,
+      pricingKey: pricingLookup?.matchedKey ?? null,
+      pricing: pricingInfo,
       totalCost,
     },
   };

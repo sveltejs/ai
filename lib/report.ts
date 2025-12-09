@@ -1,7 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
-import type { CostCalculation, ModelPricingDisplay } from "./pricing.ts";
 
 // Type definitions for result.json structure
 interface TextBlock {
@@ -95,6 +94,7 @@ interface Metadata {
   mcpTransportType?: string | null;
   timestamp: string;
   model: string;
+  pricingKey?: string | null;
   pricing?: PricingInfo | null;
   totalCost?: TotalCostInfo | null;
 }

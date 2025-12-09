@@ -297,7 +297,7 @@ function renderTestSection(test: SingleTestResult, index: number): string {
  */
 function renderPricingSection(data: MultiTestResultData): string {
   const { metadata } = data;
-  const { pricing, totalCost } = metadata;
+  const { pricing, totalCost, pricingKey } = metadata;
 
   if (!pricing && !totalCost) {
     return "";
@@ -306,9 +306,14 @@ function renderPricingSection(data: MultiTestResultData): string {
   // Build pricing info rows
   let pricingInfoHtml = "";
   if (pricing) {
+    const pricingKeyDisplay = pricingKey
+      ? `<span class="pricing-key" title="Key matched in model-pricing.json">${escapeHtml(pricingKey)}</span>`
+      : "";
+    
     pricingInfoHtml = `
       <div class="pricing-rates">
         <span class="rate-label">Model Pricing:</span>
+        ${pricingKeyDisplay}
         <span class="rate-value">${formatMTokCost(pricing.inputCostPerMTok)}/MTok in</span>
         <span class="rate-separator">·</span>
         <span class="rate-value">${formatMTokCost(pricing.outputCostPerMTok)}/MTok out</span>
@@ -405,6 +410,16 @@ function getPricingStyles(): string {
 
     .rate-label {
       font-weight: 500;
+    }
+
+    .pricing-key {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 11px;
     }
 
     .rate-value {
