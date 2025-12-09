@@ -1,7 +1,10 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PRICING_FILE_PATH = join(process.cwd(), "data/model-pricing.json");
+// Use import.meta for robust path resolution regardless of working directory
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PRICING_FILE_PATH = join(__dirname, "../data/model-pricing.json");
 
 /**
  * Model pricing information
@@ -43,6 +46,23 @@ export interface ModelPricingLookup {
   matchedKey: string;
 }
 
+/**
+ * Provider normalization configuration
+ * - strip: Remove the provider prefix when generating candidates
+ * - keepNested: For nested paths like "openrouter/anthropic/model", also try "anthropic/model"
+ */
+interface ProviderConfig {
+  strip: boolean;
+  keepNested: boolean;
+}
+
+const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
+  openrouter: { strip: true, keepNested: true },
+  anthropic: { strip: true, keepNested: false },
+  openai: { strip: true, keepNested: false },
+  lmstudio: { strip: true, keepNested: false },
+};
+
 // Cache the loaded pricing data
 let pricingData: Record<string, unknown> | null = null;
 
@@ -72,79 +92,91 @@ function loadPricingData(): Record<string, unknown> {
 }
 
 /**
- * Normalize a model string for pricing lookup
- * Handles various formats like:
- * - anthropic/claude-sonnet-4 -> claude-sonnet-4
- * - openrouter/anthropic/claude-sonnet-4 -> anthropic/claude-sonnet-4
- * - openai/gpt-4o -> gpt-4o
+ * Generate lookup candidates for a model string using provider configuration
+ * Returns candidates in priority order (most specific first)
  */
-function normalizeModelForLookup(modelString: string): string[] {
+function generateLookupCandidates(modelString: string): string[] {
   const candidates: string[] = [];
 
-  // Add the original model string (without our provider prefix)
-  if (modelString.startsWith("openrouter/")) {
-    // openrouter/anthropic/claude-sonnet-4 -> anthropic/claude-sonnet-4
-    const withoutOpenRouter = modelString.replace("openrouter/", "");
-    candidates.push(`openrouter/${withoutOpenRouter}`);
-    candidates.push(withoutOpenRouter);
+  // Find matching provider config
+  const slashIndex = modelString.indexOf("/");
+  if (slashIndex === -1) {
+    // No provider prefix, just use as-is
+    return [modelString];
+  }
 
-    // Also try just the model name: anthropic/claude-sonnet-4 -> claude-sonnet-4
-    const parts = withoutOpenRouter.split("/");
-    if (parts.length > 1) {
-      candidates.push(parts.slice(1).join("/"));
+  const provider = modelString.slice(0, slashIndex);
+  const config = PROVIDER_CONFIGS[provider];
+
+  if (!config) {
+    // Unknown provider, try original string only
+    return [modelString];
+  }
+
+  const remainder = modelString.slice(slashIndex + 1);
+
+  // Always try the full string first (with provider prefix for the pricing file format)
+  candidates.push(modelString);
+
+  if (config.strip) {
+    // Try without our provider prefix
+    candidates.push(remainder);
+  }
+
+  if (config.keepNested) {
+    // For nested paths like "anthropic/claude-model", also try just "claude-model"
+    const nestedSlashIndex = remainder.indexOf("/");
+    if (nestedSlashIndex !== -1) {
+      candidates.push(remainder.slice(nestedSlashIndex + 1));
     }
-  } else if (modelString.startsWith("anthropic/")) {
-    // anthropic/claude-sonnet-4 -> claude-sonnet-4
-    const modelName = modelString.replace("anthropic/", "");
-    candidates.push(modelString);
-    candidates.push(modelName);
-    // Try common Anthropic naming patterns
-    candidates.push(`anthropic/${modelName}`);
-  } else if (modelString.startsWith("openai/")) {
-    // openai/gpt-4o -> gpt-4o
-    const modelName = modelString.replace("openai/", "");
-    candidates.push(modelString);
-    candidates.push(modelName);
-  } else if (modelString.startsWith("lmstudio/")) {
-    // Local models - won't have pricing
-    candidates.push(modelString);
-  } else {
-    candidates.push(modelString);
   }
 
   return candidates;
 }
 
 /**
+ * Extract pricing from model data if available
+ */
+function extractPricing(
+  modelData: Record<string, unknown>,
+): ModelPricing | null {
+  const inputCost = modelData.input_cost_per_token;
+  const outputCost = modelData.output_cost_per_token;
+
+  if (typeof inputCost !== "number" && typeof outputCost !== "number") {
+    return null;
+  }
+
+  return {
+    inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
+    outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
+    cacheReadInputTokenCost:
+      typeof modelData.cache_read_input_token_cost === "number"
+        ? modelData.cache_read_input_token_cost
+        : undefined,
+    cacheCreationInputTokenCost:
+      typeof modelData.cache_creation_input_token_cost === "number"
+        ? modelData.cache_creation_input_token_cost
+        : undefined,
+  };
+}
+
+/**
  * Look up pricing information for a model, returning both the pricing and the matched key
  * Returns null if pricing is not found
  */
-export function lookupModelPricing(modelString: string): ModelPricingLookup | null {
+export function lookupModelPricing(
+  modelString: string,
+): ModelPricingLookup | null {
   const data = loadPricingData();
-  const candidates = normalizeModelForLookup(modelString);
+  const candidates = generateLookupCandidates(modelString);
 
   for (const candidate of candidates) {
     const modelData = data[candidate] as Record<string, unknown> | undefined;
     if (modelData) {
-      const inputCost = modelData.input_cost_per_token;
-      const outputCost = modelData.output_cost_per_token;
-
-      if (typeof inputCost === "number" || typeof outputCost === "number") {
-        return {
-          pricing: {
-            inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
-            outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
-            cacheReadInputTokenCost:
-              typeof modelData.cache_read_input_token_cost === "number"
-                ? modelData.cache_read_input_token_cost
-                : undefined,
-            cacheCreationInputTokenCost:
-              typeof modelData.cache_creation_input_token_cost === "number"
-                ? modelData.cache_creation_input_token_cost
-                : undefined,
-          },
-          matchedKey: candidate,
-        };
+      const pricing = extractPricing(modelData);
+      if (pricing) {
+        return { pricing, matchedKey: candidate };
       }
     }
   }
@@ -153,10 +185,12 @@ export function lookupModelPricing(modelString: string): ModelPricingLookup | nu
 }
 
 /**
- * Get pricing information for a model using an explicit key
+ * Look up pricing information for a model using an explicit key
  * Returns null if pricing is not found
  */
-export function lookupModelPricingByKey(pricingKey: string): ModelPricingLookup | null {
+export function lookupModelPricingByKey(
+  pricingKey: string,
+): ModelPricingLookup | null {
   const data = loadPricingData();
   const modelData = data[pricingKey] as Record<string, unknown> | undefined;
 
@@ -164,28 +198,12 @@ export function lookupModelPricingByKey(pricingKey: string): ModelPricingLookup 
     return null;
   }
 
-  const inputCost = modelData.input_cost_per_token;
-  const outputCost = modelData.output_cost_per_token;
-
-  if (typeof inputCost === "number" || typeof outputCost === "number") {
-    return {
-      pricing: {
-        inputCostPerToken: typeof inputCost === "number" ? inputCost : 0,
-        outputCostPerToken: typeof outputCost === "number" ? outputCost : 0,
-        cacheReadInputTokenCost:
-          typeof modelData.cache_read_input_token_cost === "number"
-            ? modelData.cache_read_input_token_cost
-            : undefined,
-        cacheCreationInputTokenCost:
-          typeof modelData.cache_creation_input_token_cost === "number"
-            ? modelData.cache_creation_input_token_cost
-            : undefined,
-      },
-      matchedKey: pricingKey,
-    };
+  const pricing = extractPricing(modelData);
+  if (!pricing) {
+    return null;
   }
 
-  return null;
+  return { pricing, matchedKey: pricingKey };
 }
 
 /**
@@ -214,6 +232,13 @@ export function getModelPricingDisplay(
 
 /**
  * Calculate the cost for given token usage
+ *
+ * Billing model explanation:
+ * - inputTokens: Total input tokens reported by the API (includes cached)
+ * - cachedInputTokens: Subset of input tokens that were cache hits
+ * - Cached tokens are billed at a reduced rate (cacheReadInputTokenCost)
+ * - Uncached input tokens (inputTokens - cachedInputTokens) are billed at full rate
+ * - Output tokens are always billed at the output rate
  */
 export function calculateCost(
   pricing: ModelPricing,
@@ -221,12 +246,14 @@ export function calculateCost(
   outputTokens: number,
   cachedInputTokens: number = 0,
 ): CostCalculation {
-  // For cached tokens, we subtract them from input tokens for billing purposes
-  // and bill them at the cache read rate (if available, otherwise free)
+  // Uncached input tokens are billed at full input rate
   const uncachedInputTokens = inputTokens - cachedInputTokens;
-
   const inputCost = uncachedInputTokens * pricing.inputCostPerToken;
+
+  // Output tokens billed at output rate
   const outputCost = outputTokens * pricing.outputCostPerToken;
+
+  // Cached tokens billed at reduced cache read rate (or free if not specified)
   const cacheReadCost =
     cachedInputTokens * (pricing.cacheReadInputTokenCost ?? 0);
 
@@ -280,3 +307,6 @@ export function getAllModelKeys(): string[] {
   const data = loadPricingData();
   return Object.keys(data).filter((key) => key !== "sample_spec");
 }
+
+// Export for testing
+export { generateLookupCandidates as _generateLookupCandidates };

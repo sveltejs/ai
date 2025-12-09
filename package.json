@@ -9,7 +9,8 @@
     "update-model-pricing": "bun run scripts/update-model-pricing.ts",
     "verify-tests": "bun run verify-references.ts",
     "prettier": "prettier --write .",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "test:self": "bun vitest run lib/*.test.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

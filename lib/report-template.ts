@@ -1,6 +1,7 @@
 import type { TestVerificationResult } from "./output-test-runner.ts";
 import type { MultiTestResultData, SingleTestResult } from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
+import { formatCost, formatMTokCost } from "./pricing.ts";
 
 // Type definitions for content blocks
 interface TextBlock {
@@ -81,31 +82,6 @@ function formatTimestamp(timestamp: string): string {
 function getFirstLines(code: string, numLines: number): string {
   const lines = code.split("\n");
   return lines.slice(0, numLines).join("\n");
-}
-
-/**
- * Format a cost value as USD string
- */
-function formatCost(cost: number): string {
-  if (cost === 0) return "$0.00";
-  if (cost < 0.01) {
-    return `$${cost.toFixed(6)}`;
-  }
-  if (cost < 1) {
-    return `$${cost.toFixed(4)}`;
-  }
-  return `$${cost.toFixed(2)}`;
-}
-
-/**
- * Format per-million-token cost
- */
-function formatMTokCost(costPerMTok: number): string {
-  if (costPerMTok === 0) return "$0";
-  if (costPerMTok < 0.01) {
-    return `$${costPerMTok.toFixed(4)}`;
-  }
-  return `$${costPerMTok.toFixed(2)}`;
 }
 
 /**
