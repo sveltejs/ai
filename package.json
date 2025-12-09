@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "update": "bun update --interactive",
+    "update-model-pricing": "bun run scripts/update-model-pricing.ts",
     "verify-tests": "bun run verify-references.ts",
     "prettier": "prettier --write .",
     "tsc": "tsc --noEmit"

@@ -6,6 +6,8 @@ import {
   generateReport,
   type SingleTestResult,
   type MultiTestResultData,
+  type PricingInfo,
+  type TotalCostInfo,
 } from "./lib/report.ts";
 import { getModelProvider, loadEnvConfig } from "./lib/providers.ts";
 import {
@@ -20,6 +22,12 @@ import {
   runTestVerification,
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
+import {
+  getModelPricingDisplay,
+  calculateCost,
+  formatCost,
+  isPricingAvailable,
+} from "./lib/pricing.ts";
 import type { LanguageModel } from "ai";
 
 /**
@@ -82,6 +90,45 @@ function extractResultWriteContent(steps: unknown[]): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Calculate total cost from test results
+ */
+function calculateTotalCost(
+  tests: SingleTestResult[],
+  modelString: string,
+): TotalCostInfo | null {
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCachedInputTokens = 0;
+
+  for (const test of tests) {
+    for (const step of test.steps) {
+      totalInputTokens += step.usage.inputTokens;
+      totalOutputTokens += step.usage.outputTokens;
+      totalCachedInputTokens += step.usage.cachedInputTokens ?? 0;
+    }
+  }
+
+  const costResult = calculateCost(
+    modelString,
+    totalInputTokens,
+    totalOutputTokens,
+    totalCachedInputTokens,
+  );
+
+  if (!costResult) return null;
+
+  return {
+    inputCost: costResult.inputCost,
+    outputCost: costResult.outputCost,
+    cacheReadCost: costResult.cacheReadCost,
+    totalCost: costResult.totalCost,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+    cachedInputTokens: totalCachedInputTokens,
+  };
 }
 
 /**
@@ -251,6 +298,10 @@ async function main() {
     `TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
   );
 
+  // Check pricing availability
+  const hasPricing = isPricingAvailable();
+  console.log(`Pricing Data: ${hasPricing ? "Available" : "Not available (run 'bun run update-model-pricing' to download)"}`);
+
   // Discover all tests
   console.log("\n📁 Discovering tests...");
   const tests = discoverTests();
@@ -346,6 +397,21 @@ async function main() {
     `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
   );
 
+  // Calculate total cost
+  const totalCost = calculateTotalCost(testResults, envConfig.modelString);
+  const pricingDisplay = getModelPricingDisplay(envConfig.modelString);
+
+  if (totalCost) {
+    console.log("\n💰 Cost Summary");
+    console.log("─".repeat(50));
+    console.log(`Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`);
+    console.log(`Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`);
+    if (totalCost.cachedInputTokens > 0) {
+      console.log(`Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()} (${formatCost(totalCost.cacheReadCost)})`);
+    }
+    console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
+  }
+
   // Ensure results directory exists
   const resultsDir = "results";
   if (!existsSync(resultsDir)) {
@@ -358,6 +424,15 @@ async function main() {
   const jsonPath = `${resultsDir}/${jsonFilename}`;
   const htmlPath = `${resultsDir}/${htmlFilename}`;
 
+  // Build pricing info for metadata
+  const pricing: PricingInfo | null = pricingDisplay
+    ? {
+        inputCostPerMTok: pricingDisplay.inputCostPerMTok,
+        outputCostPerMTok: pricingDisplay.outputCostPerMTok,
+        cacheReadCostPerMTok: pricingDisplay.cacheReadCostPerMTok,
+      }
+    : null;
+
   // Build the result data
   const resultData: MultiTestResultData = {
     tests: testResults,
@@ -367,6 +442,8 @@ async function main() {
       mcpTransportType: mcpEnabled ? mcpTransportType : null,
       timestamp: new Date().toISOString(),
       model: envConfig.modelString,
+      pricing,
+      totalCost,
     },
   };
 

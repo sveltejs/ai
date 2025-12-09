@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
+import type { CostCalculation, ModelPricingDisplay } from "./pricing.ts";
 
 // Type definitions for result.json structure
 interface TextBlock {
@@ -66,12 +67,36 @@ interface Step {
   [key: string]: unknown;
 }
 
+/**
+ * Pricing information embedded in metadata
+ */
+export interface PricingInfo {
+  inputCostPerMTok: number;
+  outputCostPerMTok: number;
+  cacheReadCostPerMTok?: number;
+}
+
+/**
+ * Total cost calculation for a test run
+ */
+export interface TotalCostInfo {
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  totalCost: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+}
+
 interface Metadata {
   mcpEnabled: boolean;
   mcpServerUrl: string | null;
   mcpTransportType?: string | null;
   timestamp: string;
   model: string;
+  pricing?: PricingInfo | null;
+  totalCost?: TotalCostInfo | null;
 }
 
 // Single test result within a multi-test run

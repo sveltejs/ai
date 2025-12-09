@@ -1,0 +1,2 @@
+# This directory contains versioned data files
+# Run `bun run update-model-pricing` to update model-pricing.json
