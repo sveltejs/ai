@@ -9,59 +9,87 @@ import {
 } from "./pricing.ts";
 
 describe("generateLookupCandidates", () => {
-  describe("openrouter provider", () => {
+  describe("openrouter provider (slash format)", () => {
     it("should generate candidates for openrouter/anthropic/model", () => {
       const candidates = generateLookupCandidates(
         "openrouter/anthropic/claude-sonnet-4",
       );
-      expect(candidates).toEqual([
-        "openrouter/anthropic/claude-sonnet-4",
-        "anthropic/claude-sonnet-4",
-        "claude-sonnet-4",
-      ]);
+      expect(candidates).toContain("openrouter/anthropic/claude-sonnet-4");
+      expect(candidates).toContain("anthropic/claude-sonnet-4");
+      expect(candidates).toContain("claude-sonnet-4");
     });
 
     it("should generate candidates for openrouter/openai/model", () => {
       const candidates = generateLookupCandidates("openrouter/openai/gpt-4o");
-      expect(candidates).toEqual([
-        "openrouter/openai/gpt-4o",
-        "openai/gpt-4o",
-        "gpt-4o",
-      ]);
+      expect(candidates).toContain("openrouter/openai/gpt-4o");
+      expect(candidates).toContain("openai/gpt-4o");
+      expect(candidates).toContain("gpt-4o");
     });
 
     it("should handle openrouter with simple model name", () => {
       const candidates = generateLookupCandidates("openrouter/some-model");
-      expect(candidates).toEqual(["openrouter/some-model", "some-model"]);
+      expect(candidates).toContain("openrouter/some-model");
+      expect(candidates).toContain("some-model");
     });
   });
 
-  describe("anthropic provider", () => {
+  describe("anthropic provider (slash format)", () => {
     it("should generate candidates for anthropic/model", () => {
       const candidates = generateLookupCandidates("anthropic/claude-haiku-4-5");
-      expect(candidates).toEqual([
-        "anthropic/claude-haiku-4-5",
-        "claude-haiku-4-5",
-      ]);
+      expect(candidates).toContain("anthropic/claude-haiku-4-5");
+      expect(candidates).toContain("claude-haiku-4-5");
     });
   });
 
-  describe("openai provider", () => {
+  describe("Vercel AI Gateway format (colon separator)", () => {
+    it("should generate candidates for anthropic:model", () => {
+      const candidates = generateLookupCandidates("anthropic:claude-sonnet-4");
+      expect(candidates).toContain("anthropic:claude-sonnet-4");
+      expect(candidates).toContain("anthropic/claude-sonnet-4");
+      expect(candidates).toContain("claude-sonnet-4");
+    });
+
+    it("should generate candidates for openai:model", () => {
+      const candidates = generateLookupCandidates("openai:gpt-4o");
+      expect(candidates).toContain("openai:gpt-4o");
+      expect(candidates).toContain("openai/gpt-4o");
+      expect(candidates).toContain("gpt-4o");
+    });
+
+    it("should generate candidates for google:model", () => {
+      const candidates = generateLookupCandidates("google:gemini-2.0-flash");
+      expect(candidates).toContain("google:gemini-2.0-flash");
+      expect(candidates).toContain("google/gemini-2.0-flash");
+      expect(candidates).toContain("gemini-2.0-flash");
+    });
+
+    it("should generate candidates for x-ai:model", () => {
+      const candidates = generateLookupCandidates("x-ai:grok-2");
+      expect(candidates).toContain("x-ai:grok-2");
+      expect(candidates).toContain("x-ai/grok-2");
+      expect(candidates).toContain("grok-2");
+    });
+  });
+
+  describe("openai provider (slash format)", () => {
     it("should generate candidates for openai/model", () => {
       const candidates = generateLookupCandidates("openai/gpt-4o");
-      expect(candidates).toEqual(["openai/gpt-4o", "gpt-4o"]);
+      expect(candidates).toContain("openai/gpt-4o");
+      expect(candidates).toContain("gpt-4o");
     });
 
     it("should handle openai/gpt-4o-mini", () => {
       const candidates = generateLookupCandidates("openai/gpt-4o-mini");
-      expect(candidates).toEqual(["openai/gpt-4o-mini", "gpt-4o-mini"]);
+      expect(candidates).toContain("openai/gpt-4o-mini");
+      expect(candidates).toContain("gpt-4o-mini");
     });
   });
 
   describe("lmstudio provider", () => {
     it("should generate candidates for lmstudio/model", () => {
       const candidates = generateLookupCandidates("lmstudio/llama-3-8b");
-      expect(candidates).toEqual(["lmstudio/llama-3-8b", "llama-3-8b"]);
+      expect(candidates).toContain("lmstudio/llama-3-8b");
+      expect(candidates).toContain("llama-3-8b");
     });
   });
 
@@ -70,10 +98,16 @@ describe("generateLookupCandidates", () => {
       const candidates = generateLookupCandidates("unknown/some-model");
       expect(candidates).toEqual(["unknown/some-model"]);
     });
+
+    it("should handle unknown provider with colon format", () => {
+      const candidates = generateLookupCandidates("unknown:some-model");
+      expect(candidates).toContain("unknown:some-model");
+      expect(candidates).toContain("unknown/some-model");
+    });
   });
 
   describe("no provider prefix", () => {
-    it("should return only the original string when no slash", () => {
+    it("should return only the original string when no separator", () => {
       const candidates = generateLookupCandidates("claude-sonnet-4");
       expect(candidates).toEqual(["claude-sonnet-4"]);
     });

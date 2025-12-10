@@ -61,6 +61,12 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   anthropic: { strip: true, keepNested: false },
   openai: { strip: true, keepNested: false },
   lmstudio: { strip: true, keepNested: false },
+  google: { strip: true, keepNested: false },
+  meta: { strip: true, keepNested: false },
+  mistral: { strip: true, keepNested: false },
+  cohere: { strip: true, keepNested: false },
+  "x-ai": { strip: true, keepNested: false },
+  deepseek: { strip: true, keepNested: false },
 };
 
 // Cache the loaded pricing data
@@ -92,34 +98,57 @@ function loadPricingData(): Record<string, unknown> {
 }
 
 /**
+ * Normalize a model string by converting different separator formats
+ * Vercel AI Gateway uses "provider:model" format
+ * Old multi-provider setup used "provider/model" format
+ * LiteLLM pricing data uses various formats
+ */
+function normalizeModelString(modelString: string): string {
+  // Convert colon separator to slash for unified processing
+  // e.g., "anthropic:claude-sonnet-4" -> "anthropic/claude-sonnet-4"
+  return modelString.replace(":", "/");
+}
+
+/**
  * Generate lookup candidates for a model string using provider configuration
  * Returns candidates in priority order (most specific first)
+ * 
+ * Supports both formats:
+ * - Vercel AI Gateway: "anthropic:claude-sonnet-4"
+ * - Multi-provider: "anthropic/claude-sonnet-4"
  */
 function generateLookupCandidates(modelString: string): string[] {
   const candidates: string[] = [];
+  
+  // Normalize the model string (convert : to /)
+  const normalizedString = normalizeModelString(modelString);
 
   // Find matching provider config
-  const slashIndex = modelString.indexOf("/");
+  const slashIndex = normalizedString.indexOf("/");
   if (slashIndex === -1) {
     // No provider prefix, just use as-is
-    return [modelString];
+    return [modelString, normalizedString].filter((v, i, a) => a.indexOf(v) === i);
   }
 
-  const provider = modelString.slice(0, slashIndex);
+  const provider = normalizedString.slice(0, slashIndex);
   const config = PROVIDER_CONFIGS[provider];
+  const remainder = normalizedString.slice(slashIndex + 1);
+
+  // Always try the original string first
+  candidates.push(modelString);
+  
+  // Also try the normalized version (with / instead of :)
+  if (normalizedString !== modelString) {
+    candidates.push(normalizedString);
+  }
 
   if (!config) {
-    // Unknown provider, try original string only
-    return [modelString];
+    // Unknown provider, try original strings only
+    return candidates.filter((v, i, a) => a.indexOf(v) === i);
   }
 
-  const remainder = modelString.slice(slashIndex + 1);
-
-  // Always try the full string first (with provider prefix for the pricing file format)
-  candidates.push(modelString);
-
   if (config.strip) {
-    // Try without our provider prefix
+    // Try without our provider prefix (just the model name)
     candidates.push(remainder);
   }
 
@@ -131,7 +160,14 @@ function generateLookupCandidates(modelString: string): string[] {
     }
   }
 
-  return candidates;
+  // Also try with common LiteLLM prefixes
+  // LiteLLM often uses "provider/model" format
+  if (!normalizedString.startsWith(provider + "/")) {
+    candidates.push(`${provider}/${remainder}`);
+  }
+
+  // Remove duplicates while preserving order
+  return candidates.filter((v, i, a) => a.indexOf(v) === i);
 }
 
 /**
