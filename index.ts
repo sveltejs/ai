@@ -9,7 +9,6 @@ import {
   type PricingInfo,
   type TotalCostInfo,
 } from "./lib/report.ts";
-import { getModelProvider, loadEnvConfig } from "./lib/providers.ts";
 import {
   discoverTests,
   buildAgentPrompt,
@@ -33,6 +32,114 @@ import {
   type ModelPricingLookup,
 } from "./lib/pricing.ts";
 import type { LanguageModel } from "ai";
+import {
+  intro,
+  multiselect,
+  isCancel,
+  cancel,
+  text,
+  select,
+  confirm,
+} from "@clack/prompts";
+import { gateway } from "ai";
+
+async function selectOptions() {
+  intro("🚀 Svelte AI Bench");
+
+  const available_models = await gateway.getAvailableModels();
+
+  const models = await multiselect({
+    message: "Select a model to benchmark",
+    options: [{ value: "custom", label: "Custom" }].concat(
+      available_models.models.reduce<Array<{ value: string; label: string }>>(
+        (arr, model) => {
+          if (model.modelType === "language") {
+            arr.push({ value: model.id, label: model.name });
+          }
+          return arr;
+        },
+        [],
+      ),
+    ),
+  });
+
+  if (isCancel(models)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  if (models.includes("custom")) {
+    const custom_model = await text({
+      message: "Enter custom model id",
+    });
+    if (isCancel(custom_model)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
+    models.push(custom_model);
+  }
+
+  const mcp_integration = await select({
+    message: "Which MCP integration to use?",
+    options: [
+      { value: "none", label: "No MCP Integration" },
+      { value: "http", label: "MCP over HTTP" },
+      { value: "stdio", label: "MCP over StdIO" },
+    ],
+  });
+
+  if (isCancel(mcp_integration)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  let mcp: string | undefined = undefined;
+
+  if (mcp_integration !== "none") {
+    const custom = await confirm({
+      message: "Do you want to provide a custom MCP server/command?",
+      initialValue: false,
+    });
+
+    if (isCancel(custom)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
+
+    if (custom) {
+      const custom_mcp = await text({
+        message: "Insert custom url or command",
+      });
+      if (isCancel(custom_mcp)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      mcp = custom_mcp;
+    } else {
+      mcp =
+        mcp_integration === "http"
+          ? "https://mcp.svelte.dev/mcp"
+          : "npx -y @sveltejs/mcp";
+    }
+  }
+
+  const testingTool = await confirm({
+    message: "Do you want to provide the testing tool to the model?",
+    initialValue: true,
+  });
+
+  if (isCancel(testingTool)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  return {
+    models: models.filter((model) => model !== "custom"),
+    mcp,
+    testingTool,
+  };
+}
 
 /**
  * Generate a timestamped filename
@@ -134,9 +241,8 @@ function calculateTotalCost(
 }
 
 /**
- * Resolve pricing lookup based on environment variables
- * Returns the pricing lookup result or null if disabled
- * Throws an error if pricing cannot be found and is not disabled
+ * Resolve pricing lookup for a model
+ * Returns the pricing lookup result or null if not found or disabled
  */
 function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
   const costDisabled = process.env.MODEL_COST_DISABLED === "true";
@@ -149,26 +255,21 @@ function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
 
   // Check if pricing data file exists
   if (!isPricingAvailable()) {
-    console.error(
-      `\n✗ Model pricing file not found. Run 'bun run update-model-pricing' to download it.`,
+    console.warn(
+      `⚠️  Model pricing file not found. Run 'bun run update-model-pricing' to download it.`,
     );
-    console.error(
-      `  Or set MODEL_COST_DISABLED=true to skip cost calculation.\n`,
-    );
-    process.exit(1);
+    console.warn(`   Cost calculation will be skipped.`);
+    return null;
   }
 
   // If explicit cost name is provided, use that
   if (explicitCostName) {
     const lookup = lookupModelPricingByKey(explicitCostName);
     if (!lookup) {
-      console.error(
-        `\n✗ Could not find pricing for MODEL_COST_NAME="${explicitCostName}" in model-pricing.json`,
+      console.warn(
+        `⚠️  Could not find pricing for MODEL_COST_NAME="${explicitCostName}"`,
       );
-      console.error(
-        `  Check that the key exists in data/model-pricing.json.\n`,
-      );
-      process.exit(1);
+      return null;
     }
     return lookup;
   }
@@ -176,21 +277,8 @@ function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
   // Try automatic lookup
   const lookup = lookupModelPricing(modelString);
   if (!lookup) {
-    console.error(
-      `\n✗ Could not find pricing for model "${modelString}" in model-pricing.json`,
-    );
-    console.error(`\n  Options:`);
-    console.error(
-      `    1. Set MODEL_COST_NAME=<key> to explicitly specify the pricing key`,
-    );
-    console.error(`       Example: MODEL_COST_NAME=claude-sonnet-4-20250514`);
-    console.error(
-      `    2. Set MODEL_COST_DISABLED=true to skip cost calculation`,
-    );
-    console.error(
-      `\n  Browse data/model-pricing.json to find the correct key for your model.\n`,
-    );
-    process.exit(1);
+    console.warn(`⚠️  Could not find pricing for model "${modelString}"`);
+    return null;
   }
 
   return lookup;
@@ -335,35 +423,22 @@ async function runSingleTest(
 
 // Main execution
 async function main() {
+  const { models, mcp, testingTool } = await selectOptions();
   // Get MCP server URL/command from environment (optional)
-  const mcpServerUrl = process.env.MCP_SERVER_URL || "";
-  const mcpEnabled = mcpServerUrl.trim() !== "";
+  const mcpServerUrl = mcp;
+  const mcpEnabled = !!mcp;
 
   // Check if TestComponent tool is disabled
-  const testComponentEnabled = process.env.DISABLE_TESTCOMPONENT_TOOL !== "1";
+  const testComponentEnabled = testingTool;
 
   // Determine MCP transport type
-  const isHttpTransport = mcpEnabled && isHttpUrl(mcpServerUrl);
+  const isHttpTransport = mcpServerUrl && isHttpUrl(mcpServerUrl);
   const mcpTransportType = isHttpTransport ? "HTTP" : "StdIO";
-
-  // Load environment configuration
-  const envConfig = loadEnvConfig();
 
   console.log("╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
-  console.log(`Model: ${envConfig.modelString}`);
-
-  // Resolve pricing lookup
-  const costDisabled = process.env.MODEL_COST_DISABLED === "true";
-  const pricingLookup = resolvePricingLookup(envConfig.modelString);
-
-  if (pricingLookup) {
-    console.log(`Pricing model mapped: ${pricingLookup.matchedKey}`);
-  } else if (costDisabled) {
-    console.log(`Pricing: Disabled (MODEL_COST_DISABLED=true)`);
-  }
-
+  console.log(`Model(s): ${models.join(", ")}`);
   console.log(`MCP Integration: ${mcpEnabled ? "Enabled" : "Disabled"}`);
   if (mcpEnabled) {
     console.log(`MCP Transport: ${mcpTransportType}`);
@@ -405,7 +480,7 @@ async function main() {
       });
     } else {
       // StdIO transport - treat mcpServerUrl as command string
-      const { command, args } = parseCommandString(mcpServerUrl);
+      const { command, args } = parseCommandString(mcpServerUrl!);
       mcpClient = await createMCPClient({
         transport: new StdioMCPTransport({
           command,
@@ -415,127 +490,142 @@ async function main() {
     }
   }
 
-  // Get model provider
-  const model = getModelProvider(envConfig);
+  let totalFailed = 0;
 
-  // Run all tests
-  const testResults: SingleTestResult[] = [];
-  const startTime = Date.now();
+  for (const modelId of models) {
+    console.log("\n" + "═".repeat(50));
+    console.log(`🤖 Running benchmark for model: ${modelId}`);
+    console.log("═".repeat(50));
 
-  for (let i = 0; i < tests.length; i++) {
-    const test = tests[i];
-    if (!test) continue;
-    const result = await runSingleTest(
-      test,
-      model,
-      mcpClient,
-      testComponentEnabled,
-      i,
-      tests.length,
+    // Resolve pricing for this model
+    const pricingLookup = resolvePricingLookup(modelId);
+    if (pricingLookup) {
+      console.log(`💰 Pricing mapped: ${pricingLookup.matchedKey}`);
+    }
+
+    // Get the model from gateway
+    const model = gateway.languageModel(modelId);
+
+    // Run all tests
+    const testResults: SingleTestResult[] = [];
+    const startTime = Date.now();
+
+    for (let i = 0; i < tests.length; i++) {
+      const test = tests[i];
+      if (!test) continue;
+      const result = await runSingleTest(
+        test,
+        model,
+        mcpClient,
+        testComponentEnabled,
+        i,
+        tests.length,
+      );
+      testResults.push(result);
+    }
+
+    const totalDuration = Date.now() - startTime;
+
+    // Print summary
+    console.log("\n" + "═".repeat(50));
+    console.log("📊 Test Summary");
+    console.log("═".repeat(50));
+
+    const passed = testResults.filter((r) => r.verification?.passed).length;
+    const failed = testResults.filter(
+      (r) => r.verification && !r.verification.passed,
+    ).length;
+    totalFailed += failed;
+    const skipped = testResults.filter((r) => !r.verification).length;
+
+    for (const result of testResults) {
+      const status = result.verification
+        ? result.verification.passed
+          ? "✓"
+          : "✗"
+        : "⊘";
+      const statusText = result.verification
+        ? result.verification.passed
+          ? "PASSED"
+          : "FAILED"
+        : "SKIPPED";
+      console.log(`${status} ${result.testName}: ${statusText}`);
+    }
+
+    console.log("─".repeat(50));
+    console.log(
+      `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
     );
-    testResults.push(result);
-  }
 
-  const totalDuration = Date.now() - startTime;
+    // Calculate total cost if pricing is available
+    let totalCost: TotalCostInfo | null = null;
+    let pricingInfo: PricingInfo | null = null;
+
+    if (pricingLookup) {
+      totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
+      const pricingDisplay = getModelPricingDisplay(pricingLookup.pricing);
+      pricingInfo = {
+        inputCostPerMTok: pricingDisplay.inputCostPerMTok,
+        outputCostPerMTok: pricingDisplay.outputCostPerMTok,
+        cacheReadCostPerMTok: pricingDisplay.cacheReadCostPerMTok,
+      };
+
+      console.log("\n💰 Cost Summary");
+      console.log("─".repeat(50));
+      console.log(
+        `Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`,
+      );
+      console.log(
+        `Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`,
+      );
+      if (totalCost.cachedInputTokens > 0) {
+        console.log(
+          `Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()} (${formatCost(totalCost.cacheReadCost)})`,
+        );
+      }
+      console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
+    }
+
+    // Ensure results directory exists
+    const resultsDir = "results";
+    if (!existsSync(resultsDir)) {
+      mkdirSync(resultsDir, { recursive: true });
+    }
+
+    // Generate timestamped filenames
+    const jsonFilename = getTimestampedFilename("result", "json");
+    const htmlFilename = getTimestampedFilename("result", "html");
+    const jsonPath = `${resultsDir}/${jsonFilename}`;
+    const htmlPath = `${resultsDir}/${htmlFilename}`;
+
+    // Build the result data
+    const resultData: MultiTestResultData = {
+      tests: testResults,
+      metadata: {
+        mcpEnabled,
+        mcpServerUrl: mcpEnabled ? mcpServerUrl! : null,
+        mcpTransportType: mcpEnabled ? mcpTransportType : null,
+        timestamp: new Date().toISOString(),
+        model: modelId,
+        pricingKey: pricingLookup?.matchedKey ?? null,
+        pricing: pricingInfo,
+        totalCost,
+      },
+    };
+
+    // Save result JSON
+    writeFileSync(jsonPath, JSON.stringify(resultData, null, 2));
+    console.log(`\n✓ Results saved to ${jsonPath}`);
+
+    // Generate HTML report
+    await generateReport(jsonPath, htmlPath);
+  }
 
   // Clean up outputs directory
   cleanupOutputsDirectory();
 
-  // Print summary
-  console.log("\n" + "═".repeat(50));
-  console.log("📊 Test Summary");
-  console.log("═".repeat(50));
-
-  const passed = testResults.filter((r) => r.verification?.passed).length;
-  const failed = testResults.filter(
-    (r) => r.verification && !r.verification.passed,
-  ).length;
-  const skipped = testResults.filter((r) => !r.verification).length;
-
-  for (const result of testResults) {
-    const status = result.verification
-      ? result.verification.passed
-        ? "✓"
-        : "✗"
-      : "⊘";
-    const statusText = result.verification
-      ? result.verification.passed
-        ? "PASSED"
-        : "FAILED"
-      : "SKIPPED";
-    console.log(`${status} ${result.testName}: ${statusText}`);
-  }
-
-  console.log("─".repeat(50));
-  console.log(
-    `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
-  );
-
-  // Calculate total cost if pricing is available
-  let totalCost: TotalCostInfo | null = null;
-  let pricingInfo: PricingInfo | null = null;
-
-  if (pricingLookup) {
-    totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
-    const pricingDisplay = getModelPricingDisplay(pricingLookup.pricing);
-    pricingInfo = {
-      inputCostPerMTok: pricingDisplay.inputCostPerMTok,
-      outputCostPerMTok: pricingDisplay.outputCostPerMTok,
-      cacheReadCostPerMTok: pricingDisplay.cacheReadCostPerMTok,
-    };
-
-    console.log("\n💰 Cost Summary");
-    console.log("─".repeat(50));
-    console.log(
-      `Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`,
-    );
-    console.log(
-      `Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`,
-    );
-    if (totalCost.cachedInputTokens > 0) {
-      console.log(
-        `Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()} (${formatCost(totalCost.cacheReadCost)})`,
-      );
-    }
-    console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
-  }
-
-  // Ensure results directory exists
-  const resultsDir = "results";
-  if (!existsSync(resultsDir)) {
-    mkdirSync(resultsDir, { recursive: true });
-  }
-
-  // Generate timestamped filenames
-  const jsonFilename = getTimestampedFilename("result", "json");
-  const htmlFilename = getTimestampedFilename("result", "html");
-  const jsonPath = `${resultsDir}/${jsonFilename}`;
-  const htmlPath = `${resultsDir}/${htmlFilename}`;
-
-  // Build the result data
-  const resultData: MultiTestResultData = {
-    tests: testResults,
-    metadata: {
-      mcpEnabled,
-      mcpServerUrl: mcpEnabled ? mcpServerUrl : null,
-      mcpTransportType: mcpEnabled ? mcpTransportType : null,
-      timestamp: new Date().toISOString(),
-      model: envConfig.modelString,
-      pricingKey: pricingLookup?.matchedKey ?? null,
-      pricing: pricingInfo,
-      totalCost,
-    },
-  };
-
-  // Save result JSON
-  writeFileSync(jsonPath, JSON.stringify(resultData, null, 2));
-  console.log(`\n✓ Results saved to ${jsonPath}`);
-
-  // Generate HTML report
-  await generateReport(jsonPath, htmlPath);
-
   // Exit with appropriate code
-  process.exit(failed > 0 ? 1 : 0);
+  process.exit(totalFailed > 0 ? 1 : 0);
 }
 
 main().catch((error) => {
