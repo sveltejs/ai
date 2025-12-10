@@ -46,29 +46,6 @@ export interface ModelPricingLookup {
   matchedKey: string;
 }
 
-/**
- * Provider normalization configuration
- * - strip: Remove the provider prefix when generating candidates
- * - keepNested: For nested paths like "openrouter/anthropic/model", also try "anthropic/model"
- */
-interface ProviderConfig {
-  strip: boolean;
-  keepNested: boolean;
-}
-
-const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
-  openrouter: { strip: true, keepNested: true },
-  anthropic: { strip: true, keepNested: false },
-  openai: { strip: true, keepNested: false },
-  lmstudio: { strip: true, keepNested: false },
-  google: { strip: true, keepNested: false },
-  meta: { strip: true, keepNested: false },
-  mistral: { strip: true, keepNested: false },
-  cohere: { strip: true, keepNested: false },
-  "x-ai": { strip: true, keepNested: false },
-  deepseek: { strip: true, keepNested: false },
-};
-
 // Cache the loaded pricing data
 let pricingData: Record<string, unknown> | null = null;
 
@@ -98,72 +75,36 @@ function loadPricingData(): Record<string, unknown> {
 }
 
 /**
- * Normalize a model string by converting different separator formats
- * Vercel AI Gateway uses "provider:model" format
- * Old multi-provider setup used "provider/model" format
- * LiteLLM pricing data uses various formats
- */
-function normalizeModelString(modelString: string): string {
-  // Convert colon separator to slash for unified processing
-  // e.g., "anthropic:claude-sonnet-4" -> "anthropic/claude-sonnet-4"
-  return modelString.replace(":", "/");
-}
-
-/**
- * Generate lookup candidates for a model string using provider configuration
+ * Generate lookup candidates for a model string
  * Returns candidates in priority order (most specific first)
  * 
- * Supports both formats:
- * - Vercel AI Gateway: "anthropic:claude-sonnet-4"
- * - Multi-provider: "anthropic/claude-sonnet-4"
+ * Vercel AI Gateway model IDs are in the format "provider/model-name"
+ * LiteLLM pricing data stores them as "vercel_ai_gateway/provider/model-name"
+ * 
+ * Examples:
+ * - "alibaba/qwen-3-14b" -> tries "vercel_ai_gateway/alibaba/qwen-3-14b", "alibaba/qwen-3-14b", "qwen-3-14b"
+ * - "anthropic/claude-sonnet-4" -> tries "vercel_ai_gateway/anthropic/claude-sonnet-4", "anthropic/claude-sonnet-4", "claude-sonnet-4"
  */
 function generateLookupCandidates(modelString: string): string[] {
   const candidates: string[] = [];
   
-  // Normalize the model string (convert : to /)
-  const normalizedString = normalizeModelString(modelString);
-
-  // Find matching provider config
-  const slashIndex = normalizedString.indexOf("/");
-  if (slashIndex === -1) {
-    // No provider prefix, just use as-is
-    return [modelString, normalizedString].filter((v, i, a) => a.indexOf(v) === i);
-  }
-
-  const provider = normalizedString.slice(0, slashIndex);
-  const config = PROVIDER_CONFIGS[provider];
-  const remainder = normalizedString.slice(slashIndex + 1);
-
-  // Always try the original string first
+  // Primary: Try with vercel_ai_gateway prefix (how LiteLLM stores gateway models)
+  candidates.push(`vercel_ai_gateway/${modelString}`);
+  
+  // Secondary: Try the model string as-is
   candidates.push(modelString);
   
-  // Also try the normalized version (with / instead of :)
-  if (normalizedString !== modelString) {
-    candidates.push(normalizedString);
-  }
-
-  if (!config) {
-    // Unknown provider, try original strings only
-    return candidates.filter((v, i, a) => a.indexOf(v) === i);
-  }
-
-  if (config.strip) {
-    // Try without our provider prefix (just the model name)
-    candidates.push(remainder);
-  }
-
-  if (config.keepNested) {
-    // For nested paths like "anthropic/claude-model", also try just "claude-model"
-    const nestedSlashIndex = remainder.indexOf("/");
+  // Tertiary: If there's a provider prefix, try just the model name
+  const slashIndex = modelString.indexOf("/");
+  if (slashIndex !== -1) {
+    const modelName = modelString.slice(slashIndex + 1);
+    candidates.push(modelName);
+    
+    // Also try nested paths (e.g., "openrouter/anthropic/claude" -> "anthropic/claude", "claude")
+    const nestedSlashIndex = modelName.indexOf("/");
     if (nestedSlashIndex !== -1) {
-      candidates.push(remainder.slice(nestedSlashIndex + 1));
+      candidates.push(modelName.slice(nestedSlashIndex + 1));
     }
-  }
-
-  // Also try with common LiteLLM prefixes
-  // LiteLLM often uses "provider/model" format
-  if (!normalizedString.startsWith(provider + "/")) {
-    candidates.push(`${provider}/${remainder}`);
   }
 
   // Remove duplicates while preserving order

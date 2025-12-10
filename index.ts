@@ -242,7 +242,8 @@ function calculateTotalCost(
 
 /**
  * Resolve pricing lookup for a model
- * Returns the pricing lookup result or null if not found or disabled
+ * Returns the pricing lookup result or null if disabled
+ * Throws an error (exits process) if pricing cannot be found and is not disabled
  */
 function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
   const costDisabled = process.env.MODEL_COST_DISABLED === "true";
@@ -255,21 +256,26 @@ function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
 
   // Check if pricing data file exists
   if (!isPricingAvailable()) {
-    console.warn(
-      `⚠️  Model pricing file not found. Run 'bun run update-model-pricing' to download it.`,
+    console.error(
+      `\n✗ Model pricing file not found. Run 'bun run update-model-pricing' to download it.`,
     );
-    console.warn(`   Cost calculation will be skipped.`);
-    return null;
+    console.error(
+      `  Or set MODEL_COST_DISABLED=true to skip cost calculation.\n`,
+    );
+    process.exit(1);
   }
 
   // If explicit cost name is provided, use that
   if (explicitCostName) {
     const lookup = lookupModelPricingByKey(explicitCostName);
     if (!lookup) {
-      console.warn(
-        `⚠️  Could not find pricing for MODEL_COST_NAME="${explicitCostName}"`,
+      console.error(
+        `\n✗ Could not find pricing for MODEL_COST_NAME="${explicitCostName}" in model-pricing.json`,
       );
-      return null;
+      console.error(
+        `  Check that the key exists in data/model-pricing.json.\n`,
+      );
+      process.exit(1);
     }
     return lookup;
   }
@@ -277,8 +283,23 @@ function resolvePricingLookup(modelString: string): ModelPricingLookup | null {
   // Try automatic lookup
   const lookup = lookupModelPricing(modelString);
   if (!lookup) {
-    console.warn(`⚠️  Could not find pricing for model "${modelString}"`);
-    return null;
+    console.error(
+      `\n✗ Could not find pricing for model "${modelString}" in model-pricing.json`,
+    );
+    console.error(`\n  Options:`);
+    console.error(
+      `    1. Set MODEL_COST_NAME=<key> to explicitly specify the pricing key`,
+    );
+    console.error(
+      `       Example: MODEL_COST_NAME=vercel_ai_gateway/anthropic/claude-sonnet-4`,
+    );
+    console.error(
+      `    2. Set MODEL_COST_DISABLED=true to skip cost calculation`,
+    );
+    console.error(
+      `\n  Browse data/model-pricing.json to find the correct key for your model.\n`,
+    );
+    process.exit(1);
   }
 
   return lookup;
@@ -435,10 +456,15 @@ async function main() {
   const isHttpTransport = mcpServerUrl && isHttpUrl(mcpServerUrl);
   const mcpTransportType = isHttpTransport ? "HTTP" : "StdIO";
 
+  const costDisabled = process.env.MODEL_COST_DISABLED === "true";
+
   console.log("╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
   console.log(`Model(s): ${models.join(", ")}`);
+  if (costDisabled) {
+    console.log(`Pricing: Disabled (MODEL_COST_DISABLED=true)`);
+  }
   console.log(`MCP Integration: ${mcpEnabled ? "Enabled" : "Disabled"}`);
   if (mcpEnabled) {
     console.log(`MCP Transport: ${mcpTransportType}`);
@@ -462,6 +488,14 @@ async function main() {
   if (tests.length === 0) {
     console.error("No tests found in tests/ directory");
     process.exit(1);
+  }
+
+  // Pre-validate pricing for all models before starting any benchmarks
+  // This ensures we fail fast if any model's pricing is missing
+  const pricingLookups = new Map<string, ModelPricingLookup | null>();
+  for (const modelId of models) {
+    const pricingLookup = resolvePricingLookup(modelId);
+    pricingLookups.set(modelId, pricingLookup);
   }
 
   // Set up outputs directory
@@ -497,8 +531,8 @@ async function main() {
     console.log(`🤖 Running benchmark for model: ${modelId}`);
     console.log("═".repeat(50));
 
-    // Resolve pricing for this model
-    const pricingLookup = resolvePricingLookup(modelId);
+    // Get pre-validated pricing for this model
+    const pricingLookup = pricingLookups.get(modelId) ?? null;
     if (pricingLookup) {
       console.log(`💰 Pricing mapped: ${pricingLookup.matchedKey}`);
     }
