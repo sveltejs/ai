@@ -26,6 +26,7 @@
     "@ai-sdk/mcp": "0.0.11",
     "@ai-sdk/openai": "^2.0.77",
     "@ai-sdk/openai-compatible": "^1.0.28",
+    "@clack/prompts": "^0.11.0",
     "@openrouter/ai-sdk-provider": "^1.4.1",
     "@testing-library/svelte": "^5.2.9",
     "@testing-library/user-event": "^14.6.1",

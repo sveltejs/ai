@@ -1,6 +1,6 @@
 # ai-sdk-bench
 
-AI SDK benchmarking tool that tests AI agents with MCP (Model Context Protocol) integration. Automatically discovers and runs all tests in the `tests/` directory, verifying LLM-generated Svelte components against test suites.
+AI SDK benchmarking tool that tests AI agents with MCP (Model Context Protocol) integration using the Vercel AI Gateway. Automatically discovers and runs all tests in the `tests/` directory, verifying LLM-generated Svelte components against test suites.
 
 ## Installation
 
@@ -12,83 +12,59 @@ bun install
 
 ## Setup
 
-To set up `.env`:
+Configure your API keys in `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Then configure your API keys and model in `.env`:
+Then add the necessary API key use the `vercel env pull`
 
-```bash
-# Required: Choose your model
-MODEL=anthropic/claude-sonnet-4
-ANTHROPIC_API_KEY=your_key_here
+### Required API Keys
 
-# Optional: Enable MCP integration (leave empty to disable)
-MCP_SERVER_URL=https://mcp.svelte.dev/mcp
-```
+You'll need at least one API key for the providers you want to test:
 
-### Environment Variables
-
-**Required:**
-
-- `MODEL`: The AI model to use (e.g., `anthropic/claude-sonnet-4`, `openai/gpt-5`, `openrouter/anthropic/claude-sonnet-4`, `lmstudio/model-name`)
-- Corresponding API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`)
-  - Note: No API key required for `lmstudio/*` models (runs locally)
-
-**Optional:**
-
-- `MCP_SERVER_URL`: MCP server URL (leave empty to disable MCP integration)
-
-### Supported Providers
-
-**Cloud Providers:**
-
-- `anthropic/*` - Direct Anthropic API (requires `ANTHROPIC_API_KEY`)
-- `openai/*` - Direct OpenAI API (requires `OPENAI_API_KEY`)
-- `openrouter/*` - OpenRouter unified API (requires `OPENROUTER_API_KEY`)
-
-**Local Providers:**
-
-- `lmstudio/*` - LM Studio local server (requires LM Studio running on `http://localhost:1234`)
-
-Example configurations:
-
-```bash
-# Anthropic
-MODEL=anthropic/claude-sonnet-4
-ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenAI
-MODEL=openai/gpt-5
-OPENAI_API_KEY=sk-...
-
-# OpenRouter
-MODEL=openrouter/anthropic/claude-sonnet-4
-OPENROUTER_API_KEY=sk-or-...
-
-# LM Studio (local)
-MODEL=lmstudio/llama-3-8b
-# No API key needed - make sure LM Studio is running!
-```
+- `VERCEL_OIDC_TOKEN`: The OIDC token for vercel AI gateway
 
 ## Usage
 
-To run the benchmark (automatically discovers and runs all tests):
+To run the benchmark:
 
 ```bash
 bun run index.ts
 ```
 
-The benchmark will:
+### Interactive CLI
+
+The benchmark features an interactive CLI that will prompt you for configuration:
+
+1. **Model Selection**: Choose one or more models from the Vercel AI Gateway
+   - Select from available models in your configured providers
+   - Optionally add custom model IDs
+   - Can test multiple models in a single run
+
+2. **MCP Integration**: Choose your MCP configuration
+   - **No MCP Integration**: Run without external tools
+   - **MCP over HTTP**: Use HTTP-based MCP server (default: `https://mcp.svelte.dev/mcp`)
+   - **MCP over StdIO**: Use local MCP server via command (default: `npx -y @sveltejs/mcp`)
+   - Option to provide custom MCP server URL or command
+
+3. **TestComponent Tool**: Enable/disable the testing tool for models
+   - Allows models to run tests during component development
+   - Enabled by default
+
+### Benchmark Workflow
+
+After configuration, the benchmark will:
 
 1. Discover all tests in `tests/` directory
-2. For each test:
+2. For each selected model and test:
    - Run the AI agent with the test's prompt
    - Extract the generated Svelte component
    - Verify the component against the test suite
 3. Generate a combined report with all results
+
+### Results and Reports
 
 Results are saved to the `results/` directory with timestamped filenames:
 
@@ -148,12 +124,17 @@ This copies each `Reference.svelte` to `Component.svelte` temporarily and runs t
 
 ## MCP Integration
 
-The tool supports optional integration with MCP (Model Context Protocol) servers:
+The tool supports optional integration with MCP (Model Context Protocol) servers through the interactive CLI. When running the benchmark, you'll be prompted to choose:
 
-- **Enabled**: Set `MCP_SERVER_URL` to a valid MCP server URL
-- **Disabled**: Leave `MCP_SERVER_URL` empty or unset
+- **No MCP Integration**: Run without external tools
+- **MCP over HTTP**: Connect to an HTTP-based MCP server
+  - Default: `https://mcp.svelte.dev/mcp`
+  - Option to provide a custom URL
+- **MCP over StdIO**: Connect to a local MCP server via command
+  - Default: `npx -y @sveltejs/mcp`
+  - Option to provide a custom command
 
-MCP status is documented in both the JSON metadata and displayed as a badge in the HTML report.
+MCP status, transport type, and server configuration are documented in both the JSON metadata and displayed as a badge in the HTML report.
 
 ## Exit Codes
 

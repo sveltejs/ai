@@ -7,7 +7,6 @@ import {
   type SingleTestResult,
   type MultiTestResultData,
 } from "./lib/report.ts";
-import { getModelProvider, loadEnvConfig } from "./lib/providers.ts";
 import {
   discoverTests,
   buildAgentPrompt,
@@ -21,6 +20,114 @@ import {
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
 import type { LanguageModel } from "ai";
+import {
+  intro,
+  multiselect,
+  isCancel,
+  cancel,
+  text,
+  select,
+  confirm,
+} from "@clack/prompts";
+import { gateway } from "ai";
+
+async function selectOptions() {
+  intro("🚀 Svelte AI Bench");
+
+  const available_models = await gateway.getAvailableModels();
+
+  const models = await multiselect({
+    message: "Select a model to benchmark",
+    options: [{ value: "custom", label: "Custom" }].concat(
+      available_models.models.reduce<Array<{ value: string; label: string }>>(
+        (arr, model) => {
+          if (model.modelType === "language") {
+            arr.push({ value: model.id, label: model.name });
+          }
+          return arr;
+        },
+        [],
+      ),
+    ),
+  });
+
+  if (isCancel(models)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  if (models.includes("custom")) {
+    const custom_model = await text({
+      message: "Enter custom model id",
+    });
+    if (isCancel(custom_model)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
+    models.push(custom_model);
+  }
+
+  const mcp_integration = await select({
+    message: "Which MCP integration to use?",
+    options: [
+      { value: "none", label: "No MCP Integration" },
+      { value: "http", label: "MCP over HTTP" },
+      { value: "stdio", label: "MCP over StdIO" },
+    ],
+  });
+
+  if (isCancel(mcp_integration)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  let mcp: string | undefined = undefined;
+
+  if (mcp_integration !== "none") {
+    const custom = await confirm({
+      message: "Do you want to provide a custom MCP server/command?",
+      initialValue: false,
+    });
+
+    if (isCancel(custom)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
+
+    if (custom) {
+      const custom_mcp = await text({
+        message: "Insert custom url or command",
+      });
+      if (isCancel(custom_mcp)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      mcp = custom_mcp;
+    } else {
+      mcp =
+        mcp_integration === "http"
+          ? "https://mcp.svelte.dev/mcp"
+          : "npx -y @sveltejs/mcp";
+    }
+  }
+
+  const testingTool = await confirm({
+    message: "Do you want to provide the testing tool to the model?",
+    initialValue: true,
+  });
+
+  if (isCancel(testingTool)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  return {
+    models: models.filter((model) => model !== "custom"),
+    mcp,
+    testingTool,
+  };
+}
 
 /**
  * Generate a timestamped filename
@@ -223,21 +330,22 @@ async function runSingleTest(
 
 // Main execution
 async function main() {
+  const { models, mcp, testingTool } = await selectOptions();
   // Get MCP server URL/command from environment (optional)
-  const mcpServerUrl = process.env.MCP_SERVER_URL || "";
-  const mcpEnabled = mcpServerUrl.trim() !== "";
+  const mcpServerUrl = mcp;
+  const mcpEnabled = !!mcp;
 
   // Check if TestComponent tool is disabled
-  const testComponentEnabled = process.env.DISABLE_TESTCOMPONENT_TOOL !== "1";
+  const testComponentEnabled = testingTool;
 
   // Determine MCP transport type
-  const isHttpTransport = mcpEnabled && isHttpUrl(mcpServerUrl);
+  const isHttpTransport = mcpServerUrl && isHttpUrl(mcpServerUrl);
   const mcpTransportType = isHttpTransport ? "HTTP" : "StdIO";
 
   console.log("╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
-  console.log(`Model: ${process.env.MODEL}`);
+  console.log(`Model: ${models.join(", ")}`);
   console.log(`MCP Integration: ${mcpEnabled ? "Enabled" : "Disabled"}`);
   if (mcpEnabled) {
     console.log(`MCP Transport: ${mcpTransportType}`);
@@ -279,7 +387,7 @@ async function main() {
       });
     } else {
       // StdIO transport - treat mcpServerUrl as command string
-      const { command, args } = parseCommandString(mcpServerUrl);
+      const { command, args } = parseCommandString(mcpServerUrl!);
       mcpClient = await createMCPClient({
         transport: new StdioMCPTransport({
           command,
@@ -289,96 +397,97 @@ async function main() {
     }
   }
 
-  // Load environment configuration and get model provider
-  const envConfig = loadEnvConfig();
-  const model = getModelProvider(envConfig);
+  let totalFailed = 0;
 
-  // Run all tests
-  const testResults: SingleTestResult[] = [];
-  const startTime = Date.now();
+  for (const model of models) {
+    // Run all tests
+    const testResults: SingleTestResult[] = [];
+    const startTime = Date.now();
 
-  for (let i = 0; i < tests.length; i++) {
-    const test = tests[i];
-    if (!test) continue;
-    const result = await runSingleTest(
-      test,
-      model,
-      mcpClient,
-      testComponentEnabled,
-      i,
-      tests.length,
+    for (let i = 0; i < tests.length; i++) {
+      const test = tests[i];
+      if (!test) continue;
+      const result = await runSingleTest(
+        test,
+        model,
+        mcpClient,
+        testComponentEnabled,
+        i,
+        tests.length,
+      );
+      testResults.push(result);
+    }
+
+    const totalDuration = Date.now() - startTime;
+
+    // Clean up outputs directory
+    cleanupOutputsDirectory();
+
+    // Print summary
+    console.log("\n" + "═".repeat(50));
+    console.log("📊 Test Summary");
+    console.log("═".repeat(50));
+
+    const passed = testResults.filter((r) => r.verification?.passed).length;
+    const failed = testResults.filter(
+      (r) => r.verification && !r.verification.passed,
+    ).length;
+    totalFailed += failed;
+    const skipped = testResults.filter((r) => !r.verification).length;
+
+    for (const result of testResults) {
+      const status = result.verification
+        ? result.verification.passed
+          ? "✓"
+          : "✗"
+        : "⊘";
+      const statusText = result.verification
+        ? result.verification.passed
+          ? "PASSED"
+          : "FAILED"
+        : "SKIPPED";
+      console.log(`${status} ${result.testName}: ${statusText}`);
+    }
+
+    console.log("─".repeat(50));
+    console.log(
+      `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
     );
-    testResults.push(result);
+
+    // Ensure results directory exists
+    const resultsDir = "results";
+    if (!existsSync(resultsDir)) {
+      mkdirSync(resultsDir, { recursive: true });
+    }
+
+    // Generate timestamped filenames
+    const jsonFilename = getTimestampedFilename("result", "json");
+    const htmlFilename = getTimestampedFilename("result", "html");
+    const jsonPath = `${resultsDir}/${jsonFilename}`;
+    const htmlPath = `${resultsDir}/${htmlFilename}`;
+
+    // Build the result data
+    const resultData: MultiTestResultData = {
+      tests: testResults,
+      metadata: {
+        mcpEnabled,
+        mcpServerUrl: mcpEnabled ? mcpServerUrl! : null,
+        mcpTransportType: mcpEnabled ? mcpTransportType : null,
+        timestamp: new Date().toISOString(),
+        model,
+      },
+    };
+
+    // Save result JSON
+    writeFileSync(jsonPath, JSON.stringify(resultData, null, 2));
+    console.log(`\n✓ Results saved to ${jsonPath}`);
+
+    // Generate HTML report
+    await generateReport(jsonPath, htmlPath);
   }
-
-  const totalDuration = Date.now() - startTime;
-
-  // Clean up outputs directory
-  cleanupOutputsDirectory();
-
-  // Print summary
-  console.log("\n" + "═".repeat(50));
-  console.log("📊 Test Summary");
-  console.log("═".repeat(50));
-
-  const passed = testResults.filter((r) => r.verification?.passed).length;
-  const failed = testResults.filter(
-    (r) => r.verification && !r.verification.passed,
-  ).length;
-  const skipped = testResults.filter((r) => !r.verification).length;
-
-  for (const result of testResults) {
-    const status = result.verification
-      ? result.verification.passed
-        ? "✓"
-        : "✗"
-      : "⊘";
-    const statusText = result.verification
-      ? result.verification.passed
-        ? "PASSED"
-        : "FAILED"
-      : "SKIPPED";
-    console.log(`${status} ${result.testName}: ${statusText}`);
-  }
-
-  console.log("─".repeat(50));
-  console.log(
-    `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
-  );
-
-  // Ensure results directory exists
-  const resultsDir = "results";
-  if (!existsSync(resultsDir)) {
-    mkdirSync(resultsDir, { recursive: true });
-  }
-
-  // Generate timestamped filenames
-  const jsonFilename = getTimestampedFilename("result", "json");
-  const htmlFilename = getTimestampedFilename("result", "html");
-  const jsonPath = `${resultsDir}/${jsonFilename}`;
-  const htmlPath = `${resultsDir}/${htmlFilename}`;
-
-  // Build the result data
-  const resultData: MultiTestResultData = {
-    tests: testResults,
-    metadata: {
-      mcpEnabled,
-      mcpServerUrl: mcpEnabled ? mcpServerUrl : null,
-      mcpTransportType: mcpEnabled ? mcpTransportType : null,
-      timestamp: new Date().toISOString(),
-      model: envConfig.modelString,
-    },
-  };
-
-  // Save result JSON
-  writeFileSync(jsonPath, JSON.stringify(resultData, null, 2));
-  console.log(`\n✓ Results saved to ${jsonPath}`);
-
-  // Generate HTML report
-  await generateReport(jsonPath, htmlPath);
 
   // Exit with appropriate code
-  process.exit(failed > 0 ? 1 : 0);
+  process.exit(totalFailed > 0 ? 1 : 0);
 }
 
 main().catch((error) => {
