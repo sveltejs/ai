@@ -8,7 +8,7 @@ AI SDK benchmarking tool built with Vercel AI SDK and Bun runtime. Tests AI agen
 # Install dependencies (runs patch-package automatically)
 bun install
 
-# Run the main benchmark (discovers and runs all tests)
+# Run main benchmark (discovers and runs all tests)
 bun run index.ts
 
 # Verify reference implementations against test suites
@@ -22,6 +22,11 @@ bun run generate-report.ts results/result-2024-12-07-14-30-45.json
 
 # Run TypeScript type checking
 bun tsc --noEmit
+
+# Secrets management
+bun run secrets                       # Show token status
+bun run secrets set VERCEL_OIDC_TOKEN <value>  # Store Vercel token
+bun run secrets get VERCEL_OIDC_TOKEN           # Get Vercel token
 ```
 
 ## Environment Variables
@@ -106,10 +111,28 @@ MCP_SERVER_URL=
 
 ### Required API Keys
 
-- `ANTHROPIC_API_KEY`: Required when using `anthropic/*` models
-- `OPENAI_API_KEY`: Required when using `openai/*` models (get at https://platform.openai.com/api-keys)
-- `OPENROUTER_API_KEY`: Required when using `openrouter/*` models (get at https://openrouter.ai/keys)
-- No API key required for `lmstudio/*` models (runs locally)
+- `VERCEL_OIDC_TOKEN`: Required for Vercel AI Gateway (stored in bun.secrets)
+- Other API keys (Anthropic, OpenAI, OpenRouter) are configured in Vercel dashboard when using AI Gateway
+
+### Secrets Management
+
+The tool uses Bun's secure credential storage for the Vercel OIDC token:
+
+```bash
+# Store Vercel OIDC token
+bun run secrets set VERCEL_OIDC_TOKEN your_token_here
+
+# Check if token is stored
+bun run secrets
+
+# Get the stored token
+bun run secrets get VERCEL_OIDC_TOKEN
+```
+
+**Security Benefits:**
+- Encrypted storage using OS credential manager (Keychain, libsecret, Windows Credential Manager)
+- No plaintext tokens in files
+- User-level access control
 
 ### Provider Routing
 

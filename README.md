@@ -12,17 +12,40 @@ bun install
 
 ## Setup
 
-Configure your API keys in `.env`:
+Configure your Vercel OIDC token using bun.secrets:
 
 1. Install Vercel CLI if you haven't already
 2. Run `bun run vercel:link` and link the benchmark to a project that has AI Gateway enabled
-3. Run the benchmark with "bun run dev"
+3. Store your VERCEL_OIDC_TOKEN securely:
+   ```bash
+   # Get your token from Vercel project settings
+   bun run secrets set VERCEL_OIDC_TOKEN your_token_here
+   ```
 
 ### Required API Keys
 
-You'll need at least one API key for the providers you want to test:
+- `VERCEL_OIDC_TOKEN`: Required for Vercel AI Gateway (stored in bun.secrets)
+- Other API keys (Anthropic, OpenAI, OpenRouter) are configured in the Vercel dashboard when using AI Gateway
 
-- `VERCEL_OIDC_TOKEN`: The OIDC token for vercel AI gateway
+## Secrets Management
+
+API keys are stored securely using your OS credential manager:
+
+```bash
+# Check if token is set
+bun run secrets
+
+# Set token
+bun run secrets set VERCEL_OIDC_TOKEN your_token_here
+
+# Get token
+bun run secrets get VERCEL_OIDC_TOKEN
+```
+
+**Security Benefits:**
+- Encrypted storage using OS credential manager (Keychain, libsecret, Windows Credential Manager)
+- No plaintext API keys in files
+- User-level access control
 
 ## Usage
 

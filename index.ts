@@ -43,6 +43,7 @@ import {
   note,
 } from "@clack/prompts";
 import { gateway } from "ai";
+import { loadTokenToEnv } from "./scripts/secrets.ts";
 
 interface PricingValidationResult {
   enabled: boolean;
@@ -500,6 +501,9 @@ async function runSingleTest(
 
 // Main execution
 async function main() {
+  // Load VERCEL_OIDC_TOKEN from bun.secrets
+  await loadTokenToEnv();
+  
   const { models, mcp, testingTool, pricing } = await selectOptions();
 
   // Get MCP server URL/command from environment (optional)
