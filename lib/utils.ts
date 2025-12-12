@@ -1,4 +1,8 @@
-import { calculateCost, extractPricingFromGatewayModel } from "./pricing.ts";
+import {
+  calculateCost,
+  type ModelPricing,
+  type CacheSimulation,
+} from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import type { TestDefinition } from "./test-discovery.ts";
@@ -55,7 +59,7 @@ export function extractResultWriteContent(steps: unknown[]) {
 
 export function calculateTotalCost(
   tests: SingleTestResult[],
-  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
+  pricing: ModelPricing,
 ) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -80,6 +84,7 @@ export function calculateTotalCost(
     inputCost: costResult.inputCost,
     outputCost: costResult.outputCost,
     cacheReadCost: costResult.cacheReadCost,
+    cacheCreationCost: costResult.cacheCreationCost,
     totalCost: costResult.totalCost,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
@@ -98,61 +103,87 @@ IMPORTANT: When you have finished implementing the component, use the ResultWrit
   ];
 }
 
+/**
+ * Simulates cache savings using a growing prefix model.
+ *
+ * Cache behavior modeled:
+ * - Each test runs in its own context (cache resets between tests)
+ * - Step 1's input is written to cache (pays cache creation rate)
+ * - Each subsequent step:
+ *   - Previous step's full input is cached (pays cache read rate)
+ *   - New tokens extend the cache (pays cache creation rate)
+ * - The cache prefix grows with each step
+ *
+ * Example for a test with 3 steps (inputs: 1000 → 1500 → 2000):
+ *   Step 1: 1000 tokens → pay cache creation for 1000
+ *   Step 2: 1500 tokens → 1000 cached (read) + 500 new (creation)
+ *   Step 3: 2000 tokens → 1500 cached (read) + 500 new (creation)
+ */
 export function simulateCacheSavings(
   tests: SingleTestResult[],
-  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
-) {
-  let totalCacheableTokens = 0;
-  let totalCacheHits = 0;
-
-  // Calculate savings for each test
-  for (const test of tests) {
-    if (test.steps.length === 0) continue;
-
-    // Cacheable tokens = input tokens from step 1
-    const cacheableTokens = test.steps[0]?.usage.inputTokens ?? 0;
-    // Cache hits = number of subsequent steps (2-N)
-    const cacheHits = test.steps.length - 1;
-
-    totalCacheableTokens += cacheableTokens;
-    totalCacheHits += cacheHits;
-  }
-
-  // Calculate actual cost (no caching)
-  let actualInputTokens = 0;
-  let actualOutputTokens = 0;
-  for (const test of tests) {
-    for (const step of test.steps) {
-      actualInputTokens += step.usage.inputTokens;
-      actualOutputTokens += step.usage.outputTokens;
-    }
-  }
-  const actualCost =
-    actualInputTokens * pricing.inputCostPerToken +
-    actualOutputTokens * pricing.outputCostPerToken;
-
-  // Calculate simulated cost with caching
-  // Cache read cost: 10% of input rate
+  pricing: ModelPricing,
+): CacheSimulation {
+  // Default rates if not specified:
+  // - Cache read: 10% of input cost
+  // - Cache creation: 125% of input cost (25% premium)
   const cacheReadRate =
     pricing.cacheReadInputTokenCost ?? pricing.inputCostPerToken * 0.1;
-  // Cache write cost: 125% of input rate (25% extra)
   const cacheWriteRate =
     pricing.cacheCreationInputTokenCost ?? pricing.inputCostPerToken * 1.25;
 
-  // Savings from cache reads
-  const cacheSavings =
-    totalCacheableTokens *
-    totalCacheHits *
-    (pricing.inputCostPerToken - cacheReadRate);
-  // Extra cost for cache writes
-  const cacheWriteCost =
-    totalCacheableTokens * (cacheWriteRate - pricing.inputCostPerToken);
+  let totalCacheableTokens = 0; // Tokens written to cache in step 1 of each test
+  let totalCacheHits = 0; // Total tokens read from cache across all steps
+  let totalCacheWriteTokens = 0; // Total tokens written to cache (including extensions)
+  let actualCost = 0;
+  let simulatedCost = 0;
 
-  const simulatedCostWithCache = actualCost - cacheSavings + cacheWriteCost;
+  for (const test of tests) {
+    if (test.steps.length === 0) continue;
+
+    let previousInput = 0;
+
+    for (let i = 0; i < test.steps.length; i++) {
+      const step = test.steps[i];
+      if (!step) continue;
+
+      const inputTokens = step.usage.inputTokens;
+      const outputTokens = step.usage.outputTokens;
+
+      // Actual cost (no caching) - all input at full rate
+      actualCost += inputTokens * pricing.inputCostPerToken;
+      actualCost += outputTokens * pricing.outputCostPerToken;
+
+      if (i === 0) {
+        // First step: pay cache creation rate for all input (to prime the cache)
+        simulatedCost += inputTokens * cacheWriteRate;
+        totalCacheableTokens += inputTokens;
+        totalCacheWriteTokens += inputTokens;
+      } else {
+        // Subsequent steps:
+        // - Previous step's input is cached (pay cache read rate)
+        // - New tokens extend the cache (pay cache creation rate)
+        const cachedPortion = previousInput;
+        const newPortion = Math.max(0, inputTokens - previousInput);
+
+        simulatedCost += cachedPortion * cacheReadRate;
+        simulatedCost += newPortion * cacheWriteRate;
+
+        totalCacheHits += cachedPortion;
+        totalCacheWriteTokens += newPortion;
+      }
+
+      // Output tokens always paid at full rate
+      simulatedCost += outputTokens * pricing.outputCostPerToken;
+
+      // This step's input becomes the cached prefix for the next step
+      previousInput = inputTokens;
+    }
+  }
 
   return {
-    simulatedCostWithCache,
+    simulatedCostWithCache: simulatedCost,
     cacheableTokens: totalCacheableTokens,
     cacheHits: totalCacheHits,
+    cacheWriteTokens: totalCacheWriteTokens,
   };
 }

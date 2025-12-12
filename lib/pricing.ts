@@ -1,8 +1,61 @@
-import type { GatewayLanguageModelEntry } from "@ai-sdk/gateway";
+export interface ModelPricing {
+  inputCostPerToken: number;
+  outputCostPerToken: number;
+  cacheReadInputTokenCost?: number;
+  cacheCreationInputTokenCost?: number;
+}
 
-export function extractPricingFromGatewayModel(
-  model: GatewayLanguageModelEntry,
-) {
+export interface CostCalculation {
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheCreationCost: number;
+  totalCost: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+}
+
+export interface CacheSimulation {
+  simulatedCostWithCache: number;
+  cacheableTokens: number;
+  cacheHits: number;
+  cacheWriteTokens: number;
+}
+
+export interface ModelPricingDisplay {
+  inputCostPerMTok: number;
+  outputCostPerMTok: number;
+  cacheReadCostPerMTok?: number;
+  cacheCreationCostPerMTok?: number;
+}
+
+export interface ModelPricingLookup {
+  pricing: ModelPricing;
+  matchedKey: string;
+}
+
+export interface GatewayPricing {
+  input?: string;
+  output?: string;
+  cachedInputTokens?: string;
+  cacheCreationInputTokens?: string;
+}
+
+export interface GatewayModel {
+  id: string;
+  name: string;
+  description?: string;
+  pricing?: GatewayPricing;
+  specification?: {
+    specificationVersion: string;
+    provider: string;
+    modelId: string;
+  };
+  modelType: string;
+}
+
+export function extractPricingFromGatewayModel(model: GatewayModel) {
   if (!model.pricing) {
     return null;
   }
@@ -18,14 +71,9 @@ export function extractPricingFromGatewayModel(
     );
   }
 
-  const result = {
+  const result: ModelPricing = {
     inputCostPerToken: inputCost,
     outputCostPerToken: outputCost,
-  } as {
-    inputCostPerToken: number;
-    outputCostPerToken: number;
-    cacheReadInputTokenCost?: number;
-    cacheCreationInputTokenCost?: number;
   };
 
   if (pricing.cachedInputTokens) {
@@ -45,11 +93,8 @@ export function extractPricingFromGatewayModel(
   return result;
 }
 
-export function buildPricingMap(models: GatewayLanguageModelEntry[]) {
-  const map = new Map<
-    string,
-    { pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>; matchedKey: string } | null
-  >();
+export function buildPricingMap(models: GatewayModel[]) {
+  const map = new Map<string, ModelPricingLookup | null>();
 
   for (const model of models) {
     const pricing = extractPricingFromGatewayModel(model);
@@ -68,14 +113,12 @@ export function buildPricingMap(models: GatewayLanguageModelEntry[]) {
 
 export function lookupPricingFromMap(
   modelId: string,
-  pricingMap: ReturnType<typeof buildPricingMap>,
+  pricingMap: Map<string, ModelPricingLookup | null>,
 ) {
   return pricingMap.get(modelId) ?? null;
 }
 
-export function getModelPricingDisplay(
-  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
-) {
+export function getModelPricingDisplay(pricing: ModelPricing) {
   return {
     inputCostPerMTok: pricing.inputCostPerToken * 1_000_000,
     outputCostPerMTok: pricing.outputCostPerToken * 1_000_000,
@@ -83,11 +126,15 @@ export function getModelPricingDisplay(
       pricing.cacheReadInputTokenCost !== undefined
         ? pricing.cacheReadInputTokenCost * 1_000_000
         : undefined,
+    cacheCreationCostPerMTok:
+      pricing.cacheCreationInputTokenCost !== undefined
+        ? pricing.cacheCreationInputTokenCost * 1_000_000
+        : undefined,
   };
 }
 
 export function calculateCost(
-  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
+  pricing: ModelPricing,
   inputTokens: number,
   outputTokens: number,
   cachedInputTokens: number = 0,
@@ -103,13 +150,18 @@ export function calculateCost(
     ? cachedInputTokens * pricing.cacheReadInputTokenCost
     : 0;
 
+  // Cache creation cost is not tracked in actual usage - it's part of input cost
+  // This field is here for consistency but will be 0 for actual cost calculations
+  const cacheCreationCost = 0;
+
   const outputCost = outputTokens * pricing.outputCostPerToken;
 
   return {
     inputCost,
     outputCost,
     cacheReadCost,
-    totalCost: inputCost + outputCost + cacheReadCost,
+    cacheCreationCost,
+    totalCost: inputCost + outputCost + cacheReadCost + cacheCreationCost,
     inputTokens,
     outputTokens,
     cachedInputTokens,
