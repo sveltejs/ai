@@ -1,6 +1,5 @@
 import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ModelMessage } from "@ai-sdk/provider-utils";
 
 export interface TestDefinition {
   name: string;
@@ -61,20 +60,4 @@ export function discoverTests(): TestDefinition[] {
   definitions.sort((a, b) => a.name.localeCompare(b.name));
 
   return definitions;
-}
-
-export function buildAgentPrompt(test: TestDefinition): ModelMessage[] {
-  return [
-    {
-      role: "user",
-      content: `${test.prompt}
-
-IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`,
-      providerOptions: {
-        anthropic: {
-          cacheControl: { type: "ephemeral" },
-        },
-      },
-    },
-  ];
 }

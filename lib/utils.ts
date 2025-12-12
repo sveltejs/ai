@@ -1,5 +1,7 @@
 import { calculateCost, type ModelPricing } from "./pricing.ts";
 import type { SingleTestResult, TotalCostInfo } from "./report.ts";
+import type { ModelMessage } from "@ai-sdk/provider-utils";
+import type { TestDefinition } from "./test-discovery.ts";
 
 export function sanitizeModelName(modelName: string): string {
   return modelName.replace(/[^a-zA-Z0-9.]/g, "-");
@@ -83,4 +85,20 @@ export function calculateTotalCost(
     outputTokens: totalOutputTokens,
     cachedInputTokens: totalCachedInputTokens,
   };
+}
+
+export function buildAgentPrompt(test: TestDefinition): ModelMessage[] {
+  return [
+    {
+      role: "user",
+      content: `${test.prompt}
+
+IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`,
+      providerOptions: {
+        anthropic: {
+          cacheControl: { type: "ephemeral" },
+        },
+      },
+    },
+  ];
 }

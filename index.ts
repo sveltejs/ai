@@ -14,12 +14,9 @@ import {
   isHttpUrl,
   extractResultWriteContent,
   calculateTotalCost,
-} from "./lib/utils.ts";
-import {
-  discoverTests,
   buildAgentPrompt,
-  type TestDefinition,
-} from "./lib/test-discovery.ts";
+} from "./lib/utils.ts";
+import { discoverTests, type TestDefinition } from "./lib/test-discovery.ts";
 import {
   setupOutputsDirectory,
   cleanupOutputsDirectory,
