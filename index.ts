@@ -568,9 +568,6 @@ async function main() {
         console.log(
           `Simulated cost with cache: ${formatCost(cacheSimulation.simulatedCostWithCache)}`,
         );
-        console.log(
-          `Potential savings: ${formatCost(cacheSimulation.potentialSavings)} (${cacheSimulation.savingsPercentage.toFixed(1)}%)`,
-        );
       }
     }
 
