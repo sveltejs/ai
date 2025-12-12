@@ -40,6 +40,7 @@ The benchmark uses the Vercel AI Gateway for model access. Configuration:
 2. Pull environment variables: `bun run vercel:env:pull`
 
 Required environment variable:
+
 - `VERCEL_OIDC_TOKEN`: OIDC token for Vercel AI Gateway authentication
 
 ### MCP Server Configuration
@@ -114,11 +115,13 @@ tests/
 ### Agent Tools
 
 **ResultWrite** (`lib/tools/result-write.ts`):
+
 - Called when agent completes component implementation
 - Signals the agent to stop (via `stopWhen` configuration)
 - Accepts `content` parameter with Svelte component code
 
 **TestComponent** (`lib/tools/test-component.ts`):
+
 - Optional tool for iterative development
 - Runs component against test suite before final submission
 - Returns pass/fail status and detailed error messages
@@ -143,6 +146,7 @@ The pricing module (`lib/pricing.ts`) handles cost calculation:
 - Displays costs in reports with per-million-token rates
 
 Key functions:
+
 - `extractPricingFromGatewayModel()`: Parse gateway model pricing
 - `buildPricingMap()`: Build lookup map from gateway models
 - `calculateCost()`: Calculate total cost from token usage

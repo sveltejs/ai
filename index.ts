@@ -5,9 +5,6 @@ import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import {
   generateReport,
   type SingleTestResult,
-  type MultiTestResultData,
-  type PricingInfo,
-  type TotalCostInfo,
 } from "./lib/report.ts";
 import {
   getTimestampedFilename,
@@ -46,22 +43,10 @@ import {
 } from "@clack/prompts";
 import { gateway } from "ai";
 
-interface PricingValidationResult {
-  enabled: boolean;
-  lookups: Map<string, ModelPricingLookup | null>;
-}
-
-interface SelectOptionsResult {
-  models: string[];
-  mcp: string | undefined;
-  testingTool: boolean;
-  pricing: PricingValidationResult;
-}
-
 async function validateAndConfirmPricing(
   models: string[],
   pricingMap: Map<string, ModelPricingLookup | null>,
-): Promise<PricingValidationResult> {
+) {
   const lookups = new Map<string, ModelPricingLookup | null>();
 
   for (const modelId of models) {
@@ -108,7 +93,9 @@ async function validateAndConfirmPricing(
       for (const modelId of modelsWithPricing) {
         const lookup = lookups.get(modelId)!;
         const display = getModelPricingDisplay(lookup.pricing);
-        lines.push(`  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`);
+        lines.push(
+          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`,
+        );
       }
     }
 
@@ -131,7 +118,7 @@ async function validateAndConfirmPricing(
   }
 }
 
-async function selectOptions(): Promise<SelectOptionsResult> {
+async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
   const available_models = await gateway.getAvailableModels();
@@ -433,7 +420,7 @@ async function main() {
 
   setupOutputsDirectory();
 
-  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+  let mcpClient = null;
   if (mcpEnabled) {
     if (isHttpTransport) {
       mcpClient = await createMCPClient({
@@ -460,8 +447,9 @@ async function main() {
     console.log(`🤖 Running benchmark for model: ${modelId}`);
     console.log("═".repeat(50));
 
-    const pricingLookup =
-      pricing.enabled ? (pricing.lookups.get(modelId) ?? null) : null;
+    const pricingLookup = pricing.enabled
+      ? (pricing.lookups.get(modelId) ?? null)
+      : null;
 
     if (pricingLookup) {
       const display = getModelPricingDisplay(pricingLookup.pricing);
@@ -472,7 +460,7 @@ async function main() {
 
     const model = gateway.languageModel(modelId);
 
-    const testResults: SingleTestResult[] = [];
+    const testResults = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -521,8 +509,8 @@ async function main() {
       `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
     );
 
-    let totalCost: TotalCostInfo | null = null;
-    let pricingInfo: PricingInfo | null = null;
+    let totalCost = null;
+    let pricingInfo = null;
 
     if (pricingLookup) {
       totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
@@ -559,7 +547,7 @@ async function main() {
     const jsonPath = `${resultsDir}/${jsonFilename}`;
     const htmlPath = `${resultsDir}/${htmlFilename}`;
 
-    const resultData: MultiTestResultData = {
+    const resultData = {
       tests: testResults,
       metadata: {
         mcpEnabled,

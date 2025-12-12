@@ -11,9 +11,9 @@ export interface TestDefinition {
   prompt: string;
 }
 
-export function discoverTests(): TestDefinition[] {
+export function discoverTests() {
   const testsDir = join(process.cwd(), "tests");
-  const definitions: TestDefinition[] = [];
+  const definitions = [];
 
   try {
     const entries = readdirSync(testsDir);
@@ -45,7 +45,7 @@ export function discoverTests(): TestDefinition[] {
             prompt,
           });
         } else {
-          const missing: string[] = [];
+          const missing = [];
           if (!existsSync(referenceFile)) missing.push("Reference.svelte");
           if (!existsSync(testFile)) missing.push("test.ts");
           if (!existsSync(promptFile)) missing.push("prompt.md");

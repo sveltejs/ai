@@ -115,18 +115,18 @@ export async function generateReport(
   resultPath: string,
   outputPath: string,
   openBrowser = true,
-): Promise<void> {
+) {
   try {
     const jsonContent = await readFile(resultPath, "utf-8");
     const data = JSON.parse(jsonContent);
 
-    let html: string;
+    let html;
 
     if ("tests" in data && Array.isArray(data.tests)) {
       html = generateMultiTestHtml(data as MultiTestResultData);
     } else {
       const legacyData = data as LegacyResultData;
-      const multiTestData: MultiTestResultData = {
+      const multiTestData = {
         tests: [
           {
             testName: "Legacy Test",
