@@ -5,9 +5,6 @@ import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import {
   generateReport,
   type SingleTestResult,
-  type MultiTestResultData,
-  type PricingInfo,
-  type TotalCostInfo,
 } from "./lib/report.ts";
 import {
   getTimestampedFilename,
@@ -426,7 +423,7 @@ async function main() {
 
   setupOutputsDirectory();
 
-  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+  let mcpClient = null;
   if (mcpEnabled) {
     if (isHttpTransport) {
       mcpClient = await createMCPClient({
@@ -466,7 +463,7 @@ async function main() {
 
     const model = gateway.languageModel(modelId);
 
-    const testResults: SingleTestResult[] = [];
+    const testResults = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -515,8 +512,8 @@ async function main() {
       `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
     );
 
-    let totalCost: TotalCostInfo | null = null;
-    let pricingInfo: PricingInfo | null = null;
+    let totalCost = null;
+    let pricingInfo = null;
 
     if (pricingLookup) {
       totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
@@ -553,7 +550,7 @@ async function main() {
     const jsonPath = `${resultsDir}/${jsonFilename}`;
     const htmlPath = `${resultsDir}/${htmlFilename}`;
 
-    const resultData: MultiTestResultData = {
+    const resultData = {
       tests: testResults,
       metadata: {
         mcpEnabled,

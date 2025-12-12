@@ -27,14 +27,14 @@ export interface TestVerificationResult {
   failedTests?: FailedTest[];
 }
 
-export function setupOutputsDirectory(): void {
+export function setupOutputsDirectory() {
   if (existsSync(OUTPUTS_DIR)) {
     rmSync(OUTPUTS_DIR, { recursive: true, force: true });
   }
   mkdirSync(OUTPUTS_DIR, { recursive: true });
 }
 
-export function cleanupOutputsDirectory(): void {
+export function cleanupOutputsDirectory() {
   if (existsSync(OUTPUTS_DIR)) {
     rmSync(OUTPUTS_DIR, { recursive: true, force: true });
   }
@@ -43,7 +43,7 @@ export function cleanupOutputsDirectory(): void {
 export function prepareTestEnvironment(
   test: TestDefinition,
   componentCode: string,
-): string {
+) {
   const testDir = join(OUTPUTS_DIR, test.name);
 
   if (existsSync(testDir)) {
@@ -60,7 +60,7 @@ export function prepareTestEnvironment(
   return testDir;
 }
 
-export function cleanupTestEnvironment(testName: string): void {
+export function cleanupTestEnvironment(testName: string) {
   const testDir = join(OUTPUTS_DIR, testName);
   if (existsSync(testDir)) {
     rmSync(testDir, { recursive: true, force: true });
@@ -70,7 +70,7 @@ export function cleanupTestEnvironment(testName: string): void {
 export async function runTestVerification(
   test: TestDefinition,
   componentCode: string,
-): Promise<TestVerificationResult> {
+) {
   const startTime = Date.now();
 
   try {
@@ -97,8 +97,8 @@ export async function runTestVerification(
     await vitest.close();
 
     const testModules = vitest.state.getTestModules();
-    const failedTests: FailedTest[] = [];
-    const allErrors: string[] = [];
+    const failedTests = [];
+    const allErrors = [];
 
     const unhandledErrors = vitest.state.getUnhandledErrors();
     for (const error of unhandledErrors) {

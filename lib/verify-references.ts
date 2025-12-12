@@ -33,9 +33,9 @@ interface TestResult {
   failedTests?: FailedTest[];
 }
 
-export function loadTestDefinitions(): TestDefinition[] {
+export function loadTestDefinitions() {
   const testsDir = join(process.cwd(), "tests");
-  const definitions: TestDefinition[] = [];
+  const definitions = [];
 
   try {
     const entries = readdirSync(testsDir);
@@ -73,11 +73,11 @@ export function loadTestDefinitions(): TestDefinition[] {
   return definitions;
 }
 
-export function copyReferenceToComponent(testDef: TestDefinition): void {
+export function copyReferenceToComponent(testDef: TestDefinition) {
   copyFileSync(testDef.referenceFile, testDef.componentFile);
 }
 
-export function cleanupComponent(testDef: TestDefinition): void {
+export function cleanupComponent(testDef: TestDefinition) {
   if (existsSync(testDef.componentFile)) {
     try {
       unlinkSync(testDef.componentFile);
@@ -87,7 +87,7 @@ export function cleanupComponent(testDef: TestDefinition): void {
   }
 }
 
-export async function runTest(testDef: TestDefinition): Promise<TestResult> {
+export async function runTest(testDef: TestDefinition) {
   const startTime = Date.now();
 
   try {
@@ -111,8 +111,8 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
     await vitest.close();
 
     const testModules = vitest.state.getTestModules();
-    const failedTests: FailedTest[] = [];
-    const allErrors: string[] = [];
+    const failedTests = [];
+    const allErrors = [];
 
     const unhandledErrors = vitest.state.getUnhandledErrors();
     for (const error of unhandledErrors) {
@@ -235,7 +235,7 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
   }
 }
 
-export function printSummary(results: TestResult[]): void {
+export function printSummary(results: TestResult[]) {
   console.log("\n=== Test Verification Summary ===\n");
 
   const totalSuites = results.length;
@@ -269,7 +269,7 @@ export function printSummary(results: TestResult[]): void {
   }
 }
 
-export async function verifyAllReferences(): Promise<number> {
+export async function verifyAllReferences() {
   console.log("Discovering test suites...");
   const tests = loadTestDefinitions();
   console.log(`Found ${tests.length} test suite(s)\n`);
@@ -279,7 +279,7 @@ export async function verifyAllReferences(): Promise<number> {
     return 1;
   }
 
-  const results: TestResult[] = [];
+  const results = [];
 
   for (const test of tests) {
     console.log(`Running tests/${test.name}...`);

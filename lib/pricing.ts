@@ -48,7 +48,7 @@ export interface GatewayModel {
 
 export function extractPricingFromGatewayModel(
   model: GatewayModel,
-): ModelPricing | null {
+) {
   if (!model.pricing) {
     return null;
   }
@@ -88,7 +88,7 @@ export function extractPricingFromGatewayModel(
 
 export function buildPricingMap(
   models: GatewayModel[],
-): Map<string, ModelPricingLookup | null> {
+) {
   const map = new Map<string, ModelPricingLookup | null>();
 
   for (const model of models) {
@@ -109,13 +109,13 @@ export function buildPricingMap(
 export function lookupPricingFromMap(
   modelId: string,
   pricingMap: Map<string, ModelPricingLookup | null>,
-): ModelPricingLookup | null {
+) {
   return pricingMap.get(modelId) ?? null;
 }
 
 export function getModelPricingDisplay(
   pricing: ModelPricing,
-): ModelPricingDisplay {
+) {
   return {
     inputCostPerMTok: pricing.inputCostPerToken * 1_000_000,
     outputCostPerMTok: pricing.outputCostPerToken * 1_000_000,
@@ -131,7 +131,7 @@ export function calculateCost(
   inputTokens: number,
   outputTokens: number,
   cachedInputTokens: number = 0,
-): CostCalculation {
+) {
   const uncachedInputTokens = inputTokens - cachedInputTokens;
   const inputCost = uncachedInputTokens * pricing.inputCostPerToken;
 
@@ -151,7 +151,7 @@ export function calculateCost(
   };
 }
 
-export function formatCost(cost: number): string {
+export function formatCost(cost: number) {
   if (cost === 0) return "$0.00";
   if (cost < 0.01) {
     return `$${cost.toFixed(6)}`;
@@ -162,7 +162,7 @@ export function formatCost(cost: number): string {
   return `$${cost.toFixed(2)}`;
 }
 
-export function formatMTokCost(costPerMTok: number): string {
+export function formatMTokCost(costPerMTok: number) {
   if (costPerMTok === 0) return "$0";
   if (costPerMTok < 0.01) {
     return `$${costPerMTok.toFixed(4)}`;

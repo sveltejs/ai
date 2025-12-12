@@ -42,7 +42,7 @@ interface Step {
   [key: string]: unknown;
 }
 
-function escapeHtml(text: string): string {
+function escapeHtml(text: string) {
   const map: Record<string, string> = {
     "&": "&amp;",
     "<": "&lt;",
@@ -57,7 +57,7 @@ function escapeHtml(text: string): string {
   return result;
 }
 
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: string) {
   const date = new Date(timestamp);
   return date.toLocaleString("en-US", {
     year: "numeric",
@@ -69,12 +69,12 @@ function formatTimestamp(timestamp: string): string {
   });
 }
 
-function getFirstLines(code: string, numLines: number): string {
+function getFirstLines(code: string, numLines: number) {
   const lines = code.split("\n");
   return lines.slice(0, numLines).join("\n");
 }
 
-function renderContentBlock(block: ContentBlock): string {
+function renderContentBlock(block: ContentBlock) {
   if (block.type === "text") {
     return `<div class="text">${escapeHtml(block.text)}</div>`;
   } else if (block.type === "tool-call") {
@@ -100,7 +100,7 @@ function renderContentBlock(block: ContentBlock): string {
 
 function renderVerificationResult(
   verification: TestVerificationResult | null,
-): string {
+) {
   if (!verification) {
     return `<div class="verification-result skipped">
       <span class="verification-icon">⊘</span>
@@ -144,7 +144,7 @@ function renderVerificationResult(
   </div>`;
 }
 
-function renderSteps(steps: Step[]): string {
+function renderSteps(steps: Step[]) {
   return steps
     .map((step, index) => {
       const assistantContentHtml =
@@ -177,7 +177,7 @@ function renderSteps(steps: Step[]): string {
     .join("\n");
 }
 
-function renderTestSection(test: SingleTestResult, index: number): string {
+function renderTestSection(test: SingleTestResult, index: number) {
   const totalTokens = test.steps.reduce(
     (sum, step) => sum + step.usage.totalTokens,
     0,
@@ -245,7 +245,7 @@ function renderTestSection(test: SingleTestResult, index: number): string {
   </details>`;
 }
 
-function renderPricingSection(data: MultiTestResultData): string {
+function renderPricingSection(data: MultiTestResultData) {
   const { metadata } = data;
   const { pricing, totalCost, pricingKey } = metadata;
 
@@ -320,7 +320,7 @@ function renderPricingSection(data: MultiTestResultData): string {
   `;
 }
 
-function getPricingStyles(): string {
+function getPricingStyles() {
   return `
     .pricing-section {
       background: var(--surface);
@@ -432,7 +432,7 @@ function getPricingStyles(): string {
   `;
 }
 
-export function generateMultiTestHtml(data: MultiTestResultData): string {
+export function generateMultiTestHtml(data: MultiTestResultData) {
   const metadata = data.metadata;
   const totalTests = data.tests.length;
   const passedTests = data.tests.filter((t) => t.verification?.passed).length;

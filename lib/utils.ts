@@ -1,7 +1,7 @@
 import { calculateCost, type ModelPricing } from "./pricing.ts";
 import type { SingleTestResult, TotalCostInfo } from "./report.ts";
 
-export function sanitizeModelName(modelName: string): string {
+export function sanitizeModelName(modelName: string) {
   return modelName.replace(/[^a-zA-Z0-9.]/g, "-");
 }
 
@@ -10,7 +10,7 @@ export function getTimestampedFilename(
   extension: string,
   modelName?: string,
   now: Date = new Date(),
-): string {
+) {
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   const day = String(now.getUTCDate()).padStart(2, "0");
@@ -24,11 +24,11 @@ export function getTimestampedFilename(
   return `${prefix}-${timestamp}${modelSuffix}.${extension}`;
 }
 
-export function isHttpUrl(str: string): boolean {
+export function isHttpUrl(str: string) {
   return str.startsWith("http://") || str.startsWith("https://");
 }
 
-export function extractResultWriteContent(steps: unknown[]): string | null {
+export function extractResultWriteContent(steps: unknown[]) {
   for (const step of steps) {
     const s = step as {
       content?: Array<{
@@ -54,7 +54,7 @@ export function extractResultWriteContent(steps: unknown[]): string | null {
 export function calculateTotalCost(
   tests: SingleTestResult[],
   pricing: ModelPricing,
-): TotalCostInfo {
+) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCachedInputTokens = 0;

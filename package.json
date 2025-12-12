@@ -10,7 +10,6 @@
     "verify-tests": "bun run verify-references.ts",
     "prettier": "prettier --write .",
     "tsc": "tsc --noEmit",
-    "test:self": "bun vitest run lib/*.test.ts",
     "vercel:link": "vercel link",
     "vercel:env:pull": "vercel env pull .env.local --yes"
   },
