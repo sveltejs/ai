@@ -9,6 +9,7 @@ import {
   type PricingInfo,
   type TotalCostInfo,
 } from "./lib/report.ts";
+import { getTimestampedFilename } from "./lib/utils.ts";
 import {
   discoverTests,
   buildAgentPrompt,
@@ -242,21 +243,6 @@ async function selectOptions(): Promise<SelectOptionsResult> {
     testingTool,
     pricing,
   };
-}
-
-/**
- * Generate a timestamped filename
- */
-function getTimestampedFilename(prefix: string, extension: string): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-
-  return `${prefix}-${year}-${month}-${day}-${hours}-${minutes}-${seconds}.${extension}`;
 }
 
 /**
@@ -679,9 +665,9 @@ async function main() {
       mkdirSync(resultsDir, { recursive: true });
     }
 
-    // Generate timestamped filenames
-    const jsonFilename = getTimestampedFilename("result", "json");
-    const htmlFilename = getTimestampedFilename("result", "html");
+    // Generate timestamped filenames with model name
+    const jsonFilename = getTimestampedFilename("result", "json", modelId);
+    const htmlFilename = getTimestampedFilename("result", "html", modelId);
     const jsonPath = `${resultsDir}/${jsonFilename}`;
     const htmlPath = `${resultsDir}/${htmlFilename}`;
 
