@@ -25,9 +25,8 @@ import {
   getModelPricingDisplay,
   formatCost,
   formatMTokCost,
-  type ModelPricingLookup,
-  type GatewayModel,
 } from "./lib/pricing.ts";
+import type { GatewayLanguageModelEntry } from "@ai-sdk/gateway";
 import type { LanguageModel } from "ai";
 import {
   intro,
@@ -43,9 +42,12 @@ import { gateway } from "ai";
 
 async function validateAndConfirmPricing(
   models: string[],
-  pricingMap: Map<string, ModelPricingLookup | null>,
+  pricingMap: ReturnType<typeof buildPricingMap>,
 ) {
-  const lookups = new Map<string, ModelPricingLookup | null>();
+  const lookups = new Map<
+    string,
+    ReturnType<typeof lookupPricingFromMap>
+  >();
 
   for (const modelId of models) {
     const lookup = lookupPricingFromMap(modelId, pricingMap);
@@ -129,8 +131,7 @@ async function selectOptions() {
 
   const available_models = await gateway.getAvailableModels();
 
-  const gatewayModels = available_models.models as GatewayModel[];
-  const pricingMap = buildPricingMap(gatewayModels);
+  const pricingMap = buildPricingMap(available_models.models);
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",

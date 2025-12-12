@@ -1,58 +1,8 @@
-export interface ModelPricing {
-  inputCostPerToken: number;
-  outputCostPerToken: number;
-  cacheReadInputTokenCost?: number;
-  cacheCreationInputTokenCost?: number;
-}
+import type { GatewayLanguageModelEntry } from "@ai-sdk/gateway";
 
-export interface CostCalculation {
-  inputCost: number;
-  outputCost: number;
-  cacheReadCost: number;
-  totalCost: number;
-  inputTokens: number;
-  outputTokens: number;
-  cachedInputTokens: number;
-}
-
-export interface CacheSimulation {
-  simulatedCostWithCache: number;
-  cacheableTokens: number;
-  cacheHits: number;
-}
-
-export interface ModelPricingDisplay {
-  inputCostPerMTok: number;
-  outputCostPerMTok: number;
-  cacheReadCostPerMTok?: number;
-}
-
-export interface ModelPricingLookup {
-  pricing: ModelPricing;
-  matchedKey: string;
-}
-
-export interface GatewayPricing {
-  input?: string;
-  output?: string;
-  cachedInputTokens?: string;
-  cacheCreationInputTokens?: string;
-}
-
-export interface GatewayModel {
-  id: string;
-  name: string;
-  description?: string;
-  pricing?: GatewayPricing;
-  specification?: {
-    specificationVersion: string;
-    provider: string;
-    modelId: string;
-  };
-  modelType: string;
-}
-
-export function extractPricingFromGatewayModel(model: GatewayModel) {
+export function extractPricingFromGatewayModel(
+  model: GatewayLanguageModelEntry,
+) {
   if (!model.pricing) {
     return null;
   }
@@ -68,9 +18,14 @@ export function extractPricingFromGatewayModel(model: GatewayModel) {
     );
   }
 
-  const result: ModelPricing = {
+  const result = {
     inputCostPerToken: inputCost,
     outputCostPerToken: outputCost,
+  } as {
+    inputCostPerToken: number;
+    outputCostPerToken: number;
+    cacheReadInputTokenCost?: number;
+    cacheCreationInputTokenCost?: number;
   };
 
   if (pricing.cachedInputTokens) {
@@ -90,8 +45,11 @@ export function extractPricingFromGatewayModel(model: GatewayModel) {
   return result;
 }
 
-export function buildPricingMap(models: GatewayModel[]) {
-  const map = new Map<string, ModelPricingLookup | null>();
+export function buildPricingMap(models: GatewayLanguageModelEntry[]) {
+  const map = new Map<
+    string,
+    { pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>; matchedKey: string } | null
+  >();
 
   for (const model of models) {
     const pricing = extractPricingFromGatewayModel(model);
@@ -110,12 +68,14 @@ export function buildPricingMap(models: GatewayModel[]) {
 
 export function lookupPricingFromMap(
   modelId: string,
-  pricingMap: Map<string, ModelPricingLookup | null>,
+  pricingMap: ReturnType<typeof buildPricingMap>,
 ) {
   return pricingMap.get(modelId) ?? null;
 }
 
-export function getModelPricingDisplay(pricing: ModelPricing) {
+export function getModelPricingDisplay(
+  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
+) {
   return {
     inputCostPerMTok: pricing.inputCostPerToken * 1_000_000,
     outputCostPerMTok: pricing.outputCostPerToken * 1_000_000,
@@ -127,7 +87,7 @@ export function getModelPricingDisplay(pricing: ModelPricing) {
 }
 
 export function calculateCost(
-  pricing: ModelPricing,
+  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
   inputTokens: number,
   outputTokens: number,
   cachedInputTokens: number = 0,

@@ -7,13 +7,12 @@ import {
   formatCost,
   formatMTokCost,
   getModelPricingDisplay,
-  type ModelPricing,
-  type GatewayModel,
 } from "./pricing.ts";
+import type { GatewayLanguageModelEntry } from "@ai-sdk/gateway";
 
 describe("extractPricingFromGatewayModel", () => {
   it("should extract pricing from a gateway model with all fields", () => {
-    const model: GatewayModel = {
+    const model: GatewayLanguageModelEntry = {
       id: "anthropic/claude-opus-4.5",
       name: "Claude Opus 4.5",
       pricing: {
@@ -21,6 +20,11 @@ describe("extractPricingFromGatewayModel", () => {
         output: "0.000025",
         cachedInputTokens: "0.0000005",
         cacheCreationInputTokens: "0.00000625",
+      },
+      specification: {
+        specificationVersion: "v2",
+        provider: "anthropic",
+        modelId: "claude-opus-4.5",
       },
       modelType: "language",
     };
@@ -35,12 +39,17 @@ describe("extractPricingFromGatewayModel", () => {
   });
 
   it("should extract pricing with only input and output", () => {
-    const model: GatewayModel = {
+    const model: GatewayLanguageModelEntry = {
       id: "openai/gpt-4o",
       name: "GPT-4o",
       pricing: {
         input: "0.000003",
         output: "0.000015",
+      },
+      specification: {
+        specificationVersion: "v2",
+        provider: "openai",
+        modelId: "gpt-4o",
       },
       modelType: "language",
     };
@@ -54,9 +63,14 @@ describe("extractPricingFromGatewayModel", () => {
   });
 
   it("should return null for model without pricing", () => {
-    const model: GatewayModel = {
+    const model: GatewayLanguageModelEntry = {
       id: "local/model",
       name: "Local Model",
+      specification: {
+        specificationVersion: "v2",
+        provider: "local",
+        modelId: "model",
+      },
       modelType: "language",
     };
 
@@ -65,12 +79,17 @@ describe("extractPricingFromGatewayModel", () => {
   });
 
   it("should throw error for model with empty pricing object", () => {
-    const model: GatewayModel = {
+    const model = {
       id: "local/model",
       name: "Local Model",
-      pricing: {},
+      pricing: {} as any,
+      specification: {
+        specificationVersion: "v2",
+        provider: "local",
+        modelId: "model",
+      },
       modelType: "language",
-    };
+    } as GatewayLanguageModelEntry;
 
     expect(() => extractPricingFromGatewayModel(model)).toThrowError(
       /Invalid pricing/,
@@ -78,12 +97,17 @@ describe("extractPricingFromGatewayModel", () => {
   });
 
   it("should throw error for invalid pricing values", () => {
-    const model: GatewayModel = {
+    const model: GatewayLanguageModelEntry = {
       id: "test/model",
       name: "Test Model",
       pricing: {
         input: "invalid",
         output: "0.000015",
+      },
+      specification: {
+        specificationVersion: "v2",
+        provider: "test",
+        modelId: "model",
       },
       modelType: "language",
     };
@@ -96,22 +120,37 @@ describe("extractPricingFromGatewayModel", () => {
 
 describe("buildPricingMap", () => {
   it("should build a map from gateway models", () => {
-    const models: GatewayModel[] = [
+    const models: GatewayLanguageModelEntry[] = [
       {
         id: "anthropic/claude-sonnet-4",
         name: "Claude Sonnet 4",
         pricing: { input: "0.000003", output: "0.000015" },
+        specification: {
+          specificationVersion: "v2",
+          provider: "anthropic",
+          modelId: "claude-sonnet-4",
+        },
         modelType: "language",
       },
       {
         id: "openai/gpt-4o",
         name: "GPT-4o",
         pricing: { input: "0.000005", output: "0.000015" },
+        specification: {
+          specificationVersion: "v2",
+          provider: "openai",
+          modelId: "gpt-4o",
+        },
         modelType: "language",
       },
       {
         id: "local/model",
         name: "Local Model",
+        specification: {
+          specificationVersion: "v2",
+          provider: "local",
+          modelId: "model",
+        },
         modelType: "language",
       },
     ];
@@ -127,11 +166,16 @@ describe("buildPricingMap", () => {
 
 describe("lookupPricingFromMap", () => {
   it("should return pricing lookup for existing model", () => {
-    const models: GatewayModel[] = [
+    const models: GatewayLanguageModelEntry[] = [
       {
         id: "anthropic/claude-sonnet-4",
         name: "Claude Sonnet 4",
         pricing: { input: "0.000003", output: "0.000015" },
+        specification: {
+          specificationVersion: "v2",
+          provider: "anthropic",
+          modelId: "claude-sonnet-4",
+        },
         modelType: "language",
       },
     ];
@@ -152,15 +196,15 @@ describe("lookupPricingFromMap", () => {
 });
 
 describe("calculateCost", () => {
-  const basePricing: ModelPricing = {
+  const basePricing = {
     inputCostPerToken: 0.000003, // $3 per MTok
     outputCostPerToken: 0.000015, // $15 per MTok
-  };
+  } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
-  const pricingWithCache: ModelPricing = {
+  const pricingWithCache = {
     ...basePricing,
     cacheReadInputTokenCost: 0.0000003, // $0.30 per MTok (10% of input)
-  };
+  } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
   describe("basic cost calculation", () => {
     it("should calculate cost with no cached tokens", () => {
@@ -235,10 +279,10 @@ describe("calculateCost", () => {
     });
 
     it("should handle pricing with zero costs", () => {
-      const freePricing: ModelPricing = {
+      const freePricing = {
         inputCostPerToken: 0,
         outputCostPerToken: 0,
-      };
+      } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
       const result = calculateCost(freePricing, 1000, 500, 0);
 
       expect(result.totalCost).toBe(0);
@@ -291,10 +335,10 @@ describe("formatMTokCost", () => {
 
 describe("getModelPricingDisplay", () => {
   it("should convert per-token costs to per-MTok", () => {
-    const pricing: ModelPricing = {
+    const pricing = {
       inputCostPerToken: 0.000003, // $3 per MTok
       outputCostPerToken: 0.000015, // $15 per MTok
-    };
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
     const display = getModelPricingDisplay(pricing);
 
@@ -304,11 +348,11 @@ describe("getModelPricingDisplay", () => {
   });
 
   it("should include cache read cost when available", () => {
-    const pricing: ModelPricing = {
+    const pricing = {
       inputCostPerToken: 0.000003,
       outputCostPerToken: 0.000015,
       cacheReadInputTokenCost: 0.0000003, // $0.30 per MTok
-    };
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
     const display = getModelPricingDisplay(pricing);
 
@@ -318,10 +362,10 @@ describe("getModelPricingDisplay", () => {
   });
 
   it("should handle zero costs", () => {
-    const pricing: ModelPricing = {
+    const pricing = {
       inputCostPerToken: 0,
       outputCostPerToken: 0,
-    };
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
     const display = getModelPricingDisplay(pricing);
 
@@ -330,11 +374,11 @@ describe("getModelPricingDisplay", () => {
   });
 
   it("should preserve explicit zero cost for cache read", () => {
-    const pricing: ModelPricing = {
+    const pricing = {
       inputCostPerToken: 0.000003,
       outputCostPerToken: 0.000015,
       cacheReadInputTokenCost: 0,
-    };
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
     const display = getModelPricingDisplay(pricing);
 

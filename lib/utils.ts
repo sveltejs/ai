@@ -1,8 +1,4 @@
-import {
-  calculateCost,
-  type ModelPricing,
-  type CacheSimulation,
-} from "./pricing.ts";
+import { calculateCost, extractPricingFromGatewayModel } from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import type { TestDefinition } from "./test-discovery.ts";
@@ -59,7 +55,7 @@ export function extractResultWriteContent(steps: unknown[]) {
 
 export function calculateTotalCost(
   tests: SingleTestResult[],
-  pricing: ModelPricing,
+  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
 ) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -104,8 +100,8 @@ IMPORTANT: When you have finished implementing the component, use the ResultWrit
 
 export function simulateCacheSavings(
   tests: SingleTestResult[],
-  pricing: ModelPricing,
-): CacheSimulation {
+  pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
+) {
   let totalCacheableTokens = 0;
   let totalCacheHits = 0;
 
