@@ -22,14 +22,15 @@ import {
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
 import {
-  lookupModelPricing,
+  buildPricingMap,
+  lookupPricingFromMap,
   getModelPricingDisplay,
   calculateCost,
   formatCost,
   formatMTokCost,
-  isPricingAvailable,
   type ModelPricing,
   type ModelPricingLookup,
+  type GatewayModel,
 } from "./lib/pricing.ts";
 import type { LanguageModel } from "ai";
 import {
@@ -61,37 +62,13 @@ interface SelectOptionsResult {
  */
 async function validateAndConfirmPricing(
   models: string[],
+  pricingMap: Map<string, ModelPricingLookup | null>,
 ): Promise<PricingValidationResult> {
   const lookups = new Map<string, ModelPricingLookup | null>();
 
-  // Check if pricing file exists
-  if (!isPricingAvailable()) {
-    note(
-      "Model pricing file not found.\nRun 'bun run update-model-pricing' to download it.",
-      "⚠️  Pricing Unavailable",
-    );
-
-    const proceed = await confirm({
-      message: "Continue without pricing?",
-      initialValue: true,
-    });
-
-    if (isCancel(proceed) || !proceed) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    // Initialize all models with null pricing
-    for (const modelId of models) {
-      lookups.set(modelId, null);
-    }
-
-    return { enabled: false, lookups };
-  }
-
-  // Look up pricing for each model
+  // Look up pricing for each model from the pre-built map
   for (const modelId of models) {
-    const lookup = lookupModelPricing(modelId);
+    const lookup = lookupPricingFromMap(modelId, pricingMap);
     lookups.set(modelId, lookup);
   }
 
@@ -103,7 +80,7 @@ async function validateAndConfirmPricing(
     const pricingLines = models.map((modelId) => {
       const lookup = lookups.get(modelId)!;
       const display = getModelPricingDisplay(lookup.pricing);
-      return `${modelId}\n  → ${lookup.matchedKey}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`;
+      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`;
     });
 
     note(pricingLines.join("\n\n"), "💰 Pricing Found");
@@ -135,7 +112,8 @@ async function validateAndConfirmPricing(
       lines.push("Pricing available for:");
       for (const modelId of modelsWithPricing) {
         const lookup = lookups.get(modelId)!;
-        lines.push(`  ✓ ${modelId} → ${lookup.matchedKey}`);
+        const display = getModelPricingDisplay(lookup.pricing);
+        lines.push(`  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`);
       }
     }
 
@@ -162,6 +140,10 @@ async function selectOptions(): Promise<SelectOptionsResult> {
   intro("🚀 Svelte AI Bench");
 
   const available_models = await gateway.getAvailableModels();
+
+  // Build pricing map from gateway models
+  const gatewayModels = available_models.models as GatewayModel[];
+  const pricingMap = buildPricingMap(gatewayModels);
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
@@ -196,8 +178,8 @@ async function selectOptions(): Promise<SelectOptionsResult> {
 
   const selectedModels = models.filter((model) => model !== "custom");
 
-  // Validate pricing for selected models
-  const pricing = await validateAndConfirmPricing(selectedModels);
+  // Validate pricing for selected models using the pre-built map
+  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
 
   const mcp_integration = await select({
     message: "Which MCP integration to use?",

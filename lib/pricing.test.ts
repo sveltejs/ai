@@ -1,83 +1,154 @@
 import { describe, it, expect } from "vitest";
 import {
-  _generateLookupCandidates as generateLookupCandidates,
+  extractPricingFromGatewayModel,
+  buildPricingMap,
+  lookupPricingFromMap,
   calculateCost,
   formatCost,
   formatMTokCost,
   getModelPricingDisplay,
   type ModelPricing,
+  type GatewayModel,
 } from "./pricing.ts";
 
-describe("generateLookupCandidates", () => {
-  describe("Vercel AI Gateway format (provider/model)", () => {
-    it("should generate candidates for alibaba/qwen-3-14b", () => {
-      const candidates = generateLookupCandidates("alibaba/qwen-3-14b");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/alibaba/qwen-3-14b",
-        "alibaba/qwen-3-14b",
-        "qwen-3-14b",
-      ]);
-    });
+describe("extractPricingFromGatewayModel", () => {
+  it("should extract pricing from a gateway model with all fields", () => {
+    const model: GatewayModel = {
+      id: "anthropic/claude-opus-4.5",
+      name: "Claude Opus 4.5",
+      pricing: {
+        input: "0.000005",
+        output: "0.000025",
+        cachedInputTokens: "0.0000005",
+        cacheCreationInputTokens: "0.00000625",
+      },
+      modelType: "language",
+    };
 
-    it("should generate candidates for anthropic/claude-sonnet-4", () => {
-      const candidates = generateLookupCandidates("anthropic/claude-sonnet-4");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/anthropic/claude-sonnet-4",
-        "anthropic/claude-sonnet-4",
-        "claude-sonnet-4",
-      ]);
-    });
+    const pricing = extractPricingFromGatewayModel(model);
 
-    it("should generate candidates for openai/gpt-4o", () => {
-      const candidates = generateLookupCandidates("openai/gpt-4o");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/openai/gpt-4o",
-        "openai/gpt-4o",
-        "gpt-4o",
-      ]);
-    });
-
-    it("should generate candidates for google/gemini-2.0-flash", () => {
-      const candidates = generateLookupCandidates("google/gemini-2.0-flash");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/google/gemini-2.0-flash",
-        "google/gemini-2.0-flash",
-        "gemini-2.0-flash",
-      ]);
-    });
-
-    it("should generate candidates for x-ai/grok-2", () => {
-      const candidates = generateLookupCandidates("x-ai/grok-2");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/x-ai/grok-2",
-        "x-ai/grok-2",
-        "grok-2",
-      ]);
-    });
+    expect(pricing).not.toBeNull();
+    expect(pricing!.inputCostPerToken).toBe(0.000005);
+    expect(pricing!.outputCostPerToken).toBe(0.000025);
+    expect(pricing!.cacheReadInputTokenCost).toBe(0.0000005);
+    expect(pricing!.cacheCreationInputTokenCost).toBe(0.00000625);
   });
 
-  describe("nested paths (openrouter style)", () => {
-    it("should handle openrouter/anthropic/claude-sonnet-4", () => {
-      const candidates = generateLookupCandidates(
-        "openrouter/anthropic/claude-sonnet-4",
-      );
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/openrouter/anthropic/claude-sonnet-4",
-        "openrouter/anthropic/claude-sonnet-4",
-        "anthropic/claude-sonnet-4",
-        "claude-sonnet-4",
-      ]);
-    });
+  it("should extract pricing with only input and output", () => {
+    const model: GatewayModel = {
+      id: "openai/gpt-4o",
+      name: "GPT-4o",
+      pricing: {
+        input: "0.000003",
+        output: "0.000015",
+      },
+      modelType: "language",
+    };
+
+    const pricing = extractPricingFromGatewayModel(model);
+
+    expect(pricing).not.toBeNull();
+    expect(pricing!.inputCostPerToken).toBe(0.000003);
+    expect(pricing!.outputCostPerToken).toBe(0.000015);
+    expect(pricing!.cacheReadInputTokenCost).toBeUndefined();
   });
 
-  describe("no provider prefix", () => {
-    it("should return only the original string with gateway prefix when no separator", () => {
-      const candidates = generateLookupCandidates("claude-sonnet-4");
-      expect(candidates).toEqual([
-        "vercel_ai_gateway/claude-sonnet-4",
-        "claude-sonnet-4",
-      ]);
-    });
+  it("should return null for model without pricing", () => {
+    const model: GatewayModel = {
+      id: "local/model",
+      name: "Local Model",
+      modelType: "language",
+    };
+
+    const pricing = extractPricingFromGatewayModel(model);
+    expect(pricing).toBeNull();
+  });
+
+  it("should return null for model with empty pricing object", () => {
+    const model: GatewayModel = {
+      id: "local/model",
+      name: "Local Model",
+      pricing: {},
+      modelType: "language",
+    };
+
+    const pricing = extractPricingFromGatewayModel(model);
+    expect(pricing).toBeNull();
+  });
+
+  it("should handle invalid pricing values gracefully", () => {
+    const model: GatewayModel = {
+      id: "test/model",
+      name: "Test Model",
+      pricing: {
+        input: "invalid",
+        output: "0.000015",
+      },
+      modelType: "language",
+    };
+
+    const pricing = extractPricingFromGatewayModel(model);
+
+    expect(pricing).not.toBeNull();
+    expect(pricing!.inputCostPerToken).toBe(0);
+    expect(pricing!.outputCostPerToken).toBe(0.000015);
+  });
+});
+
+describe("buildPricingMap", () => {
+  it("should build a map from gateway models", () => {
+    const models: GatewayModel[] = [
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet 4",
+        pricing: { input: "0.000003", output: "0.000015" },
+        modelType: "language",
+      },
+      {
+        id: "openai/gpt-4o",
+        name: "GPT-4o",
+        pricing: { input: "0.000005", output: "0.000015" },
+        modelType: "language",
+      },
+      {
+        id: "local/model",
+        name: "Local Model",
+        modelType: "language",
+      },
+    ];
+
+    const map = buildPricingMap(models);
+
+    expect(map.size).toBe(3);
+    expect(map.get("anthropic/claude-sonnet-4")).not.toBeNull();
+    expect(map.get("openai/gpt-4o")).not.toBeNull();
+    expect(map.get("local/model")).toBeNull();
+  });
+});
+
+describe("lookupPricingFromMap", () => {
+  it("should return pricing lookup for existing model", () => {
+    const models: GatewayModel[] = [
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet 4",
+        pricing: { input: "0.000003", output: "0.000015" },
+        modelType: "language",
+      },
+    ];
+
+    const map = buildPricingMap(models);
+    const lookup = lookupPricingFromMap("anthropic/claude-sonnet-4", map);
+
+    expect(lookup).not.toBeNull();
+    expect(lookup!.matchedKey).toBe("anthropic/claude-sonnet-4");
+    expect(lookup!.pricing.inputCostPerToken).toBe(0.000003);
+  });
+
+  it("should return null for non-existent model", () => {
+    const map = buildPricingMap([]);
+    const lookup = lookupPricingFromMap("non/existent", map);
+    expect(lookup).toBeNull();
   });
 });
 
