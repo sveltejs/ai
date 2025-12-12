@@ -16,10 +16,7 @@ export interface CostCalculation {
 }
 
 export interface CacheSimulation {
-  actualCost: number;
   simulatedCostWithCache: number;
-  potentialSavings: number;
-  savingsPercentage: number;
   cacheableTokens: number;
   cacheHits: number;
 }
@@ -135,22 +132,27 @@ export function calculateCost(
   outputTokens: number,
   cachedInputTokens: number = 0,
 ) {
-  // inputTokens is already the total input (no caching enabled)
-  const inputCost = inputTokens * pricing.inputCostPerToken;
+  // Calculate uncached input tokens
+  const uncachedInputTokens = inputTokens - cachedInputTokens;
+
+  // Bill uncached tokens at full rate
+  const inputCost = uncachedInputTokens * pricing.inputCostPerToken;
+
+  // Bill cached tokens at reduced rate (or free if no rate specified)
+  const cacheReadCost = pricing.cacheReadInputTokenCost
+    ? cachedInputTokens * pricing.cacheReadInputTokenCost
+    : 0;
 
   const outputCost = outputTokens * pricing.outputCostPerToken;
-
-  // No caching enabled, so no cache read cost
-  const cacheReadCost = 0;
 
   return {
     inputCost,
     outputCost,
     cacheReadCost,
-    totalCost: inputCost + outputCost,
+    totalCost: inputCost + outputCost + cacheReadCost,
     inputTokens,
     outputTokens,
-    cachedInputTokens: 0,
+    cachedInputTokens,
   };
 }
 

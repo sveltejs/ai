@@ -153,15 +153,9 @@ export function simulateCacheSavings(
     totalCacheableTokens * (cacheWriteRate - pricing.inputCostPerToken);
 
   const simulatedCostWithCache = actualCost - cacheSavings + cacheWriteCost;
-  const potentialSavings = actualCost - simulatedCostWithCache;
-  const savingsPercentage =
-    actualCost > 0 ? (potentialSavings / actualCost) * 100 : 0;
 
   return {
-    actualCost,
     simulatedCostWithCache,
-    potentialSavings,
-    savingsPercentage,
     cacheableTokens: totalCacheableTokens,
     cacheHits: totalCacheHits,
   };

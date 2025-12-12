@@ -203,10 +203,7 @@ describe("simulateCacheSavings", () => {
     const result = simulateCacheSavings(tests, basicPricing);
 
     expect(result).toEqual({
-      actualCost: 0,
       simulatedCostWithCache: 0,
-      potentialSavings: 0,
-      savingsPercentage: 0,
       cacheableTokens: 0,
       cacheHits: 0,
     });
@@ -245,10 +242,7 @@ describe("simulateCacheSavings", () => {
 
     expect(result.cacheableTokens).toBe(1000);
     expect(result.cacheHits).toBe(0);
-    expect(result.actualCost).toBe(0.002);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00225, 6);
-    expect(result.potentialSavings).toBeCloseTo(-0.00025, 6);
-    expect(result.savingsPercentage).toBeCloseTo(-12.5, 2);
   });
 
   it("calculates savings for single test with multiple steps", () => {
@@ -299,10 +293,7 @@ describe("simulateCacheSavings", () => {
 
     expect(result.cacheableTokens).toBe(1000);
     expect(result.cacheHits).toBe(2);
-    expect(result.actualCost).toBeCloseTo(0.0048, 6);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00325, 6);
-    expect(result.potentialSavings).toBeCloseTo(0.00155, 6);
-    expect(result.savingsPercentage).toBeCloseTo(32.291667, 2);
   });
 
   it("aggregates across multiple tests", () => {
@@ -368,14 +359,10 @@ describe("simulateCacheSavings", () => {
     expect(result.cacheableTokens).toBe(1300);
     expect(result.cacheHits).toBe(3);
 
-    // Actual cost = (3400 * 1e-6) + (800 * 2e-6) = 0.0034 + 0.0016 = 0.0050
-    expect(result.actualCost).toBeCloseTo(0.0050, 6);
-
     // Cache savings = 1300 * 3 * (1e-6 - 0.1e-6) = 3900 * 0.9e-6 = 0.00351
     // Cache write cost = 1300 * 0.25e-6 = 0.000325
     // Simulated cost = 0.0050 - 0.00351 + 0.000325 = 0.001815
     expect(result.simulatedCostWithCache).toBeCloseTo(0.001815, 6);
-    expect(result.potentialSavings).toBeCloseTo(0.003185, 6);
   });
 
   it("skips tests with empty steps array", () => {
@@ -454,9 +441,7 @@ describe("simulateCacheSavings", () => {
     // Cache write cost = 1000 * (1.5e-6 - 1e-6) = 1000 * 0.5e-6 = 0.0005
     // Simulated cost = 0.004 - 0.00095 + 0.0005 = 0.00355
 
-    expect(result.actualCost).toBe(0.004);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00355, 6);
-    expect(result.potentialSavings).toBeCloseTo(0.00045, 6);
   });
 
   it("handles zero actual cost edge case", () => {
@@ -480,7 +465,6 @@ describe("simulateCacheSavings", () => {
 
     const result = simulateCacheSavings(tests, basicPricing);
 
-    expect(result.actualCost).toBe(0);
-    expect(result.savingsPercentage).toBe(0);
+    expect(result.simulatedCostWithCache).toBe(0);
   });
 });

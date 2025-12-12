@@ -280,7 +280,7 @@ function renderPricingSection(data: MultiTestResultData) {
         ? `
         <div class="cost-row">
           <span class="cost-label">Total cost with prompt cache (estimate):</span>
-          <span class="cost-tokens"></span>
+          <span class="cost-tokens">${data.metadata.cacheSimulation.cacheableTokens.toLocaleString()} cacheable × ${data.metadata.cacheSimulation.cacheHits} hits</span>
           <span class="cost-value">${formatCost(data.metadata.cacheSimulation.simulatedCostWithCache)}</span>
         </div>
         `
