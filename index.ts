@@ -111,7 +111,9 @@ async function validateAndConfirmPricing(
       for (const modelId of modelsWithPricing) {
         const lookup = lookups.get(modelId)!;
         const display = getModelPricingDisplay(lookup.pricing);
-        lines.push(`  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`);
+        lines.push(
+          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`,
+        );
       }
     }
 
@@ -463,8 +465,9 @@ async function main() {
     console.log(`🤖 Running benchmark for model: ${modelId}`);
     console.log("═".repeat(50));
 
-    const pricingLookup =
-      pricing.enabled ? (pricing.lookups.get(modelId) ?? null) : null;
+    const pricingLookup = pricing.enabled
+      ? (pricing.lookups.get(modelId) ?? null)
+      : null;
 
     if (pricingLookup) {
       const display = getModelPricingDisplay(pricingLookup.pricing);

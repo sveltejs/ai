@@ -258,7 +258,7 @@ function renderPricingSection(data: MultiTestResultData): string {
     const pricingKeyDisplay = pricingKey
       ? `<span class="pricing-key" title="Key matched in model-pricing.json">${escapeHtml(pricingKey)}</span>`
       : "";
-    
+
     pricingInfoHtml = `
       <div class="pricing-rates">
         <span class="rate-label">Model Pricing:</span>
@@ -273,8 +273,9 @@ function renderPricingSection(data: MultiTestResultData): string {
 
   let costBreakdownHtml = "";
   if (totalCost) {
-    const uncachedInputTokens = totalCost.inputTokens - totalCost.cachedInputTokens;
-    
+    const uncachedInputTokens =
+      totalCost.inputTokens - totalCost.cachedInputTokens;
+
     costBreakdownHtml = `
       <div class="cost-breakdown">
         <div class="cost-row">
@@ -287,13 +288,17 @@ function renderPricingSection(data: MultiTestResultData): string {
           <span class="cost-tokens">${totalCost.outputTokens.toLocaleString()}</span>
           <span class="cost-value">${formatCost(totalCost.outputCost)}</span>
         </div>
-        ${totalCost.cachedInputTokens > 0 ? `
+        ${
+          totalCost.cachedInputTokens > 0
+            ? `
         <div class="cost-row cached">
           <span class="cost-label">Cached tokens:</span>
           <span class="cost-tokens">${totalCost.cachedInputTokens.toLocaleString()} ⚡</span>
           <span class="cost-value">${formatCost(totalCost.cacheReadCost)}</span>
         </div>
-        ` : ""}
+        `
+            : ""
+        }
         <div class="cost-row total">
           <span class="cost-label">Total Cost:</span>
           <span class="cost-tokens"></span>
@@ -473,7 +478,10 @@ export function generateMultiTestHtml(data: MultiTestResultData): string {
 
   const pricingHtml = renderPricingSection(data);
 
-  const styles = getReportStyles() + getPricingStyles() + `
+  const styles =
+    getReportStyles() +
+    getPricingStyles() +
+    `
     .cost-badge {
       background: var(--success);
       color: white;
