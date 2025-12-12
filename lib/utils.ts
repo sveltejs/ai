@@ -1,17 +1,10 @@
 import { calculateCost, type ModelPricing } from "./pricing.ts";
 import type { SingleTestResult, TotalCostInfo } from "./report.ts";
 
-/**
- * Sanitize model name for filesystem use
- */
 export function sanitizeModelName(modelName: string): string {
   return modelName.replace(/[^a-zA-Z0-9.]/g, "-");
 }
 
-/**
- * Generate a timestamped filename with optional model name
- * Uses UTC time for consistent timestamps across timezones
- */
 export function getTimestampedFilename(
   prefix: string,
   extension: string,
@@ -31,16 +24,10 @@ export function getTimestampedFilename(
   return `${prefix}-${timestamp}${modelSuffix}.${extension}`;
 }
 
-/**
- * Check if a string is an HTTP/HTTPS URL
- */
 export function isHttpUrl(str: string): boolean {
   return str.startsWith("http://") || str.startsWith("https://");
 }
 
-/**
- * Extract ResultWrite content from agent steps
- */
 export function extractResultWriteContent(steps: unknown[]): string | null {
   for (const step of steps) {
     const s = step as {
@@ -64,9 +51,6 @@ export function extractResultWriteContent(steps: unknown[]): string | null {
   return null;
 }
 
-/**
- * Calculate total cost from test results
- */
 export function calculateTotalCost(
   tests: SingleTestResult[],
   pricing: ModelPricing,

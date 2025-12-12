@@ -3,7 +3,6 @@ import type { MultiTestResultData, SingleTestResult } from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
 
-// Type definitions for content blocks
 interface TextBlock {
   type: "text";
   text: string;
@@ -43,9 +42,6 @@ interface Step {
   [key: string]: unknown;
 }
 
-/**
- * Escape HTML special characters
- */
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
     "&": "&amp;",
@@ -61,9 +57,6 @@ function escapeHtml(text: string): string {
   return result;
 }
 
-/**
- * Format timestamp to readable date
- */
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
   return date.toLocaleString("en-US", {
@@ -76,17 +69,11 @@ function formatTimestamp(timestamp: string): string {
   });
 }
 
-/**
- * Get first N lines of code
- */
 function getFirstLines(code: string, numLines: number): string {
   const lines = code.split("\n");
   return lines.slice(0, numLines).join("\n");
 }
 
-/**
- * Render a single content block based on its type
- */
 function renderContentBlock(block: ContentBlock): string {
   if (block.type === "text") {
     return `<div class="text">${escapeHtml(block.text)}</div>`;
@@ -111,9 +98,6 @@ function renderContentBlock(block: ContentBlock): string {
   return "";
 }
 
-/**
- * Render verification result section
- */
 function renderVerificationResult(
   verification: TestVerificationResult | null,
 ): string {
@@ -160,9 +144,6 @@ function renderVerificationResult(
   </div>`;
 }
 
-/**
- * Render steps for a single test
- */
 function renderSteps(steps: Step[]): string {
   return steps
     .map((step, index) => {
@@ -196,9 +177,6 @@ function renderSteps(steps: Step[]): string {
     .join("\n");
 }
 
-/**
- * Render a single test's section
- */
 function renderTestSection(test: SingleTestResult, index: number): string {
   const totalTokens = test.steps.reduce(
     (sum, step) => sum + step.usage.totalTokens,
@@ -219,7 +197,6 @@ function renderTestSection(test: SingleTestResult, index: number): string {
   const stepsHtml = renderSteps(test.steps);
   const verificationHtml = renderVerificationResult(test.verification);
 
-  // Generate unique ID for this test's component code
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
   const resultWriteHtml = test.resultWriteContent
@@ -268,9 +245,6 @@ function renderTestSection(test: SingleTestResult, index: number): string {
   </details>`;
 }
 
-/**
- * Render pricing section HTML
- */
 function renderPricingSection(data: MultiTestResultData): string {
   const { metadata } = data;
   const { pricing, totalCost, pricingKey } = metadata;
@@ -279,7 +253,6 @@ function renderPricingSection(data: MultiTestResultData): string {
     return "";
   }
 
-  // Build pricing info rows
   let pricingInfoHtml = "";
   if (pricing) {
     const pricingKeyDisplay = pricingKey
@@ -298,7 +271,6 @@ function renderPricingSection(data: MultiTestResultData): string {
     `;
   }
 
-  // Build cost breakdown
   let costBreakdownHtml = "";
   if (totalCost) {
     const uncachedInputTokens = totalCost.inputTokens - totalCost.cachedInputTokens;
@@ -343,9 +315,6 @@ function renderPricingSection(data: MultiTestResultData): string {
   `;
 }
 
-/**
- * Get additional styles for pricing section
- */
 function getPricingStyles(): string {
   return `
     .pricing-section {
@@ -458,9 +427,6 @@ function getPricingStyles(): string {
   `;
 }
 
-/**
- * Generate HTML report from multi-test result data
- */
 export function generateMultiTestHtml(data: MultiTestResultData): string {
   const metadata = data.metadata;
   const totalTests = data.tests.length;
@@ -490,7 +456,6 @@ export function generateMultiTestHtml(data: MultiTestResultData): string {
   </div>`
     : "";
 
-  // Cost display in header
   const costDisplay = metadata.totalCost
     ? `<span class="cost-badge">${formatCost(metadata.totalCost.totalCost)}</span>`
     : "";
@@ -567,13 +532,11 @@ export function generateMultiTestHtml(data: MultiTestResultData): string {
       const collapseText = button.querySelector('.collapse-text');
       
       if (preview.style.display === 'none') {
-        // Show preview
         preview.style.display = 'block';
         full.style.display = 'none';
         expandText.style.display = 'inline';
         collapseText.style.display = 'none';
       } else {
-        // Show full
         preview.style.display = 'none';
         full.style.display = 'block';
         expandText.style.display = 'none';

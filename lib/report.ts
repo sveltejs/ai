@@ -2,7 +2,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
 
-// Type definitions for result.json structure
 interface TextBlock {
   type: "text";
   text: string;
@@ -66,18 +65,12 @@ interface Step {
   [key: string]: unknown;
 }
 
-/**
- * Pricing information embedded in metadata
- */
 export interface PricingInfo {
   inputCostPerMTok: number;
   outputCostPerMTok: number;
   cacheReadCostPerMTok?: number;
 }
 
-/**
- * Total cost calculation for a test run
- */
 export interface TotalCostInfo {
   inputCost: number;
   outputCost: number;
@@ -99,7 +92,6 @@ interface Metadata {
   totalCost?: TotalCostInfo | null;
 }
 
-// Single test result within a multi-test run
 export interface SingleTestResult {
   testName: string;
   prompt: string;
@@ -108,43 +100,31 @@ export interface SingleTestResult {
   verification: TestVerificationResult | null;
 }
 
-// Multi-test result data structure
 export interface MultiTestResultData {
   tests: SingleTestResult[];
   metadata: Metadata;
 }
 
-// Legacy single-test result data structure (for backward compatibility)
 interface LegacyResultData {
   steps: Step[];
   resultWriteContent?: string | null;
   metadata?: Metadata;
 }
 
-/**
- * Generate HTML report from result.json file
- * Supports both legacy single-test and new multi-test formats
- * @param resultPath - Path to the result.json file
- * @param outputPath - Path where the HTML report will be saved
- * @param openBrowser - Whether to open the report in the default browser (default: true)
- */
 export async function generateReport(
   resultPath: string,
   outputPath: string,
   openBrowser = true,
 ): Promise<void> {
   try {
-    // Read and parse the result.json file
     const jsonContent = await readFile(resultPath, "utf-8");
     const data = JSON.parse(jsonContent);
 
     let html: string;
 
-    // Check if it's the new multi-test format
     if ("tests" in data && Array.isArray(data.tests)) {
       html = generateMultiTestHtml(data as MultiTestResultData);
     } else {
-      // Legacy format - convert to multi-test format for consistent rendering
       const legacyData = data as LegacyResultData;
       const multiTestData: MultiTestResultData = {
         tests: [
@@ -166,12 +146,10 @@ export async function generateReport(
       html = generateMultiTestHtml(multiTestData);
     }
 
-    // Write the HTML file
     await writeFile(outputPath, html, "utf-8");
 
     console.log(`✓ Report generated successfully: ${outputPath}`);
 
-    // Open the report in the default browser
     if (openBrowser) {
       Bun.spawn(["open", outputPath]);
     }

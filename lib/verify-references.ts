@@ -33,9 +33,6 @@ interface TestResult {
   failedTests?: FailedTest[];
 }
 
-/**
- * Load all test definitions from the tests/ directory
- */
 export function loadTestDefinitions(): TestDefinition[] {
   const testsDir = join(process.cwd(), "tests");
   const definitions: TestDefinition[] = [];
@@ -53,7 +50,6 @@ export function loadTestDefinitions(): TestDefinition[] {
         const promptFile = join(entryPath, "prompt.md");
         const componentFile = join(entryPath, "Component.svelte");
 
-        // Validate that required files exist
         if (existsSync(referenceFile) && existsSync(testFile)) {
           definitions.push({
             name: entry,
@@ -77,16 +73,10 @@ export function loadTestDefinitions(): TestDefinition[] {
   return definitions;
 }
 
-/**
- * Copy Reference.svelte to Component.svelte
- */
 export function copyReferenceToComponent(testDef: TestDefinition): void {
   copyFileSync(testDef.referenceFile, testDef.componentFile);
 }
 
-/**
- * Clean up Component.svelte file
- */
 export function cleanupComponent(testDef: TestDefinition): void {
   if (existsSync(testDef.componentFile)) {
     try {
@@ -97,14 +87,10 @@ export function cleanupComponent(testDef: TestDefinition): void {
   }
 }
 
-/**
- * Run vitest on a specific test file and return the results
- */
 export async function runTest(testDef: TestDefinition): Promise<TestResult> {
   const startTime = Date.now();
 
   try {
-    // Run vitest programmatically
     const vitest = await startVitest("test", [testDef.testFile], {
       watch: false,
       reporters: ["verbose"],
@@ -128,7 +114,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
     const failedTests: FailedTest[] = [];
     const allErrors: string[] = [];
 
-    // Get unhandled errors
     const unhandledErrors = vitest.state.getUnhandledErrors();
     for (const error of unhandledErrors) {
       const errorMessage =
@@ -136,7 +121,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
       allErrors.push(errorMessage);
     }
 
-    // Calculate success/failure
     let passed = true;
     let numTests = 0;
     let numFailed = 0;
@@ -159,7 +143,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
         passed = false;
       }
 
-      // Add module errors
       const moduleErrors = module.errors();
       for (const error of moduleErrors) {
         if (error.message) {
@@ -181,7 +164,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
           if (result.state === "failed") {
             numFailed++;
 
-            // Build full test name from ancestor titles
             const ancestorTitles: string[] = [];
             let parent = t.parent;
             while (parent && "name" in parent) {
@@ -200,7 +182,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
                 ? `${ancestorTitles.join(" > ")} > ${t.name}`
                 : t.name;
 
-            // Collect error messages
             const errorMessages: string[] = [];
             if (result.errors) {
               for (const testError of result.errors) {
@@ -254,9 +235,6 @@ export async function runTest(testDef: TestDefinition): Promise<TestResult> {
   }
 }
 
-/**
- * Print summary of test results
- */
 export function printSummary(results: TestResult[]): void {
   console.log("\n=== Test Verification Summary ===\n");
 
@@ -291,9 +269,6 @@ export function printSummary(results: TestResult[]): void {
   }
 }
 
-/**
- * Main function to verify all reference implementations
- */
 export async function verifyAllReferences(): Promise<number> {
   console.log("Discovering test suites...");
   const tests = loadTestDefinitions();
@@ -310,11 +285,9 @@ export async function verifyAllReferences(): Promise<number> {
     console.log(`Running tests/${test.name}...`);
 
     try {
-      // Copy Reference.svelte to Component.svelte
       copyReferenceToComponent(test);
       console.log("  ✓ Copied Reference.svelte → Component.svelte");
 
-      // Run the test
       const result = await runTest(test);
       results.push(result);
 
@@ -331,7 +304,6 @@ export async function verifyAllReferences(): Promise<number> {
           console.log("\n  Failed tests:");
           for (const failed of result.failedTests) {
             console.log(`✗ ${failed.fullName}`);
-            // Print error message with indentation
             const errorLines = failed.errorMessage.split("\n");
             for (const line of errorLines) {
               if (line.trim()) {
@@ -343,16 +315,13 @@ export async function verifyAllReferences(): Promise<number> {
         }
       }
     } finally {
-      // Always cleanup Component.svelte
       cleanupComponent(test);
       console.log("  ✓ Cleaned up Component.svelte\n");
     }
   }
 
-  // Print summary
   printSummary(results);
 
-  // Return exit code
   const allPassed = results.every((r) => r.passed);
   return allPassed ? 0 : 1;
 }

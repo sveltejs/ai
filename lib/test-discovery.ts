@@ -11,9 +11,6 @@ export interface TestDefinition {
   prompt: string;
 }
 
-/**
- * Discover all test suites in the tests/ directory and load their prompts
- */
 export function discoverTests(): TestDefinition[] {
   const testsDir = join(process.cwd(), "tests");
   const definitions: TestDefinition[] = [];
@@ -31,13 +28,11 @@ export function discoverTests(): TestDefinition[] {
         const promptFile = join(entryPath, "prompt.md");
         const componentFile = join(entryPath, "Component.svelte");
 
-        // Validate that required files exist
         if (
           existsSync(referenceFile) &&
           existsSync(testFile) &&
           existsSync(promptFile)
         ) {
-          // Load the prompt content
           const prompt = readFileSync(promptFile, "utf-8");
 
           definitions.push({
@@ -62,15 +57,11 @@ export function discoverTests(): TestDefinition[] {
     console.error("Error discovering tests:", error);
   }
 
-  // Sort by name for consistent ordering
   definitions.sort((a, b) => a.name.localeCompare(b.name));
 
   return definitions;
 }
 
-/**
- * Build a prompt for the AI agent including the test requirements
- */
 export function buildAgentPrompt(test: TestDefinition): string {
   return `${test.prompt}
 
