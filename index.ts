@@ -5,10 +5,13 @@ import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import {
   generateReport,
   type SingleTestResult,
-  type MultiTestResultData,
-  type PricingInfo,
-  type TotalCostInfo,
 } from "./lib/report.ts";
+import {
+  getTimestampedFilename,
+  isHttpUrl,
+  extractResultWriteContent,
+  calculateTotalCost,
+} from "./lib/utils.ts";
 import {
   discoverTests,
   buildAgentPrompt,
@@ -22,14 +25,13 @@ import {
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
 import {
-  lookupModelPricing,
+  buildPricingMap,
+  lookupPricingFromMap,
   getModelPricingDisplay,
-  calculateCost,
   formatCost,
   formatMTokCost,
-  isPricingAvailable,
-  type ModelPricing,
   type ModelPricingLookup,
+  type GatewayModel,
 } from "./lib/pricing.ts";
 import type { LanguageModel } from "ai";
 import {
@@ -45,54 +47,14 @@ import {
 import { gateway } from "ai";
 import { loadTokenToEnv } from "./scripts/secrets.ts";
 
-interface PricingValidationResult {
-  enabled: boolean;
-  lookups: Map<string, ModelPricingLookup | null>;
-}
-
-interface SelectOptionsResult {
-  models: string[];
-  mcp: string | undefined;
-  testingTool: boolean;
-  pricing: PricingValidationResult;
-}
-
-/**
- * Validate pricing for selected models and get user confirmation
- */
 async function validateAndConfirmPricing(
   models: string[],
-): Promise<PricingValidationResult> {
+  pricingMap: Map<string, ModelPricingLookup | null>,
+) {
   const lookups = new Map<string, ModelPricingLookup | null>();
 
-  // Check if pricing file exists
-  if (!isPricingAvailable()) {
-    note(
-      "Model pricing file not found.\nRun 'bun run update-model-pricing' to download it.",
-      "⚠️  Pricing Unavailable",
-    );
-
-    const proceed = await confirm({
-      message: "Continue without pricing?",
-      initialValue: true,
-    });
-
-    if (isCancel(proceed) || !proceed) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    // Initialize all models with null pricing
-    for (const modelId of models) {
-      lookups.set(modelId, null);
-    }
-
-    return { enabled: false, lookups };
-  }
-
-  // Look up pricing for each model
   for (const modelId of models) {
-    const lookup = lookupModelPricing(modelId);
+    const lookup = lookupPricingFromMap(modelId, pricingMap);
     lookups.set(modelId, lookup);
   }
 
@@ -100,11 +62,10 @@ async function validateAndConfirmPricing(
   const modelsWithoutPricing = models.filter((m) => lookups.get(m) === null);
 
   if (modelsWithoutPricing.length === 0) {
-    // All models have pricing - show details and let user choose
     const pricingLines = models.map((modelId) => {
       const lookup = lookups.get(modelId)!;
       const display = getModelPricingDisplay(lookup.pricing);
-      return `${modelId}\n  → ${lookup.matchedKey}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`;
+      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`;
     });
 
     note(pricingLines.join("\n\n"), "💰 Pricing Found");
@@ -121,7 +82,6 @@ async function validateAndConfirmPricing(
 
     return { enabled: usePricing, lookups };
   } else {
-    // Some or all models don't have pricing
     const lines: string[] = [];
 
     if (modelsWithoutPricing.length > 0) {
@@ -136,7 +96,10 @@ async function validateAndConfirmPricing(
       lines.push("Pricing available for:");
       for (const modelId of modelsWithPricing) {
         const lookup = lookups.get(modelId)!;
-        lines.push(`  ✓ ${modelId} → ${lookup.matchedKey}`);
+        const display = getModelPricingDisplay(lookup.pricing);
+        lines.push(
+          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`,
+        );
       }
     }
 
@@ -159,10 +122,13 @@ async function validateAndConfirmPricing(
   }
 }
 
-async function selectOptions(): Promise<SelectOptionsResult> {
+async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
   const available_models = await gateway.getAvailableModels();
+
+  const gatewayModels = available_models.models as GatewayModel[];
+  const pricingMap = buildPricingMap(gatewayModels);
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
@@ -197,8 +163,7 @@ async function selectOptions(): Promise<SelectOptionsResult> {
 
   const selectedModels = models.filter((model) => model !== "custom");
 
-  // Validate pricing for selected models
-  const pricing = await validateAndConfirmPricing(selectedModels);
+  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
 
   const mcp_integration = await select({
     message: "Which MCP integration to use?",
@@ -263,25 +228,6 @@ async function selectOptions(): Promise<SelectOptionsResult> {
   };
 }
 
-/**
- * Generate a timestamped filename
- */
-function getTimestampedFilename(prefix: string, extension: string): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-
-  return `${prefix}-${year}-${month}-${day}-${hours}-${minutes}-${seconds}.${extension}`;
-}
-
-/**
- * Parse a command string into command and args
- * Example: "npx -y @sveltejs/mcp" -> { command: "npx", args: ["-y", "@sveltejs/mcp"] }
- */
 function parseCommandString(commandString: string): {
   command: string;
   args: string[];
@@ -292,79 +238,6 @@ function parseCommandString(commandString: string): {
   return { command, args };
 }
 
-/**
- * Check if a string is an HTTP/HTTPS URL
- */
-function isHttpUrl(str: string): boolean {
-  return str.startsWith("http://") || str.startsWith("https://");
-}
-
-/**
- * Extract ResultWrite content from agent steps
- */
-function extractResultWriteContent(steps: unknown[]): string | null {
-  for (const step of steps) {
-    const s = step as {
-      content?: Array<{
-        type: string;
-        toolName?: string;
-        input?: { content: string };
-      }>;
-    };
-    if (s.content) {
-      for (const content of s.content) {
-        if (
-          content.type === "tool-call" &&
-          content.toolName === "ResultWrite"
-        ) {
-          return content.input?.content ?? null;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Calculate total cost from test results
- */
-function calculateTotalCost(
-  tests: SingleTestResult[],
-  pricing: ModelPricing,
-): TotalCostInfo {
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let totalCachedInputTokens = 0;
-
-  for (const test of tests) {
-    for (const step of test.steps) {
-      totalInputTokens += step.usage.inputTokens;
-      totalOutputTokens += step.usage.outputTokens;
-      totalCachedInputTokens += step.usage.cachedInputTokens ?? 0;
-    }
-  }
-
-  const costResult = calculateCost(
-    pricing,
-    totalInputTokens,
-    totalOutputTokens,
-    totalCachedInputTokens,
-  );
-
-  return {
-    inputCost: costResult.inputCost,
-    outputCost: costResult.outputCost,
-    cacheReadCost: costResult.cacheReadCost,
-    totalCost: costResult.totalCost,
-    inputTokens: totalInputTokens,
-    outputTokens: totalOutputTokens,
-    cachedInputTokens: totalCachedInputTokens,
-  };
-}
-
-/**
- * Run a single test with the AI agent
- */
 async function runSingleTest(
   test: TestDefinition,
   model: LanguageModel,
@@ -379,14 +252,12 @@ async function runSingleTest(
   const prompt = buildAgentPrompt(test);
 
   try {
-    // Build tools object with conditional tools
     const tools = {
       ResultWrite: resultWriteTool,
       ...(testComponentEnabled && { TestComponent: testComponentTool(test) }),
       ...(mcpClient ? await mcpClient.tools() : {}),
     };
 
-    // Create agent for this test
     let stepCounter = 0;
     const agent = new Agent({
       model,
@@ -427,14 +298,12 @@ async function runSingleTest(
       },
     });
 
-    // Run the agent
     console.log("  ⏳ Running agent...");
     if (testComponentEnabled) {
       console.log("  📋 TestComponent tool is available");
     }
     const result = await agent.generate({ prompt });
 
-    // Extract the generated component code
     const resultWriteContent = extractResultWriteContent(result.steps);
 
     if (!resultWriteContent) {
@@ -450,7 +319,6 @@ async function runSingleTest(
 
     console.log("  ✓ Component generated");
 
-    // Run test verification
     console.log("  ⏳ Verifying against tests...");
     const verification = await runTestVerification(test, resultWriteContent);
 
@@ -469,7 +337,6 @@ async function runSingleTest(
       }
     }
 
-    // Clean up this test's output directory
     cleanupTestEnvironment(test.name);
 
     return {
@@ -499,30 +366,24 @@ async function runSingleTest(
   }
 }
 
-// Main execution
 async function main() {
   // Load VERCEL_OIDC_TOKEN from bun.secrets
   await loadTokenToEnv();
   
   const { models, mcp, testingTool, pricing } = await selectOptions();
 
-  // Get MCP server URL/command from environment (optional)
   const mcpServerUrl = mcp;
   const mcpEnabled = !!mcp;
 
-  // Check if TestComponent tool is disabled
   const testComponentEnabled = testingTool;
 
-  // Determine MCP transport type
   const isHttpTransport = mcpServerUrl && isHttpUrl(mcpServerUrl);
   const mcpTransportType = isHttpTransport ? "HTTP" : "StdIO";
 
-  // Print configuration header
   console.log("\n╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
 
-  // Print models with pricing info
   console.log("\n📋 Models:");
   for (const modelId of models) {
     const lookup = pricing.lookups.get(modelId);
@@ -537,10 +398,8 @@ async function main() {
     }
   }
 
-  // Print pricing status
   console.log(`\n💰 Pricing: ${pricing.enabled ? "Enabled" : "Disabled"}`);
 
-  // Print MCP config
   console.log(`🔌 MCP Integration: ${mcpEnabled ? "Enabled" : "Disabled"}`);
   if (mcpEnabled) {
     console.log(`   Transport: ${mcpTransportType}`);
@@ -551,12 +410,10 @@ async function main() {
     }
   }
 
-  // Print tool config
   console.log(
     `🧪 TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
   );
 
-  // Discover all tests
   console.log("\n📁 Discovering tests...");
   const tests = discoverTests();
   console.log(
@@ -568,14 +425,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Set up outputs directory
   setupOutputsDirectory();
 
-  // Conditionally create MCP client based on transport type
-  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+  let mcpClient = null;
   if (mcpEnabled) {
     if (isHttpTransport) {
-      // HTTP transport
       mcpClient = await createMCPClient({
         transport: {
           type: "http",
@@ -583,7 +437,6 @@ async function main() {
         },
       });
     } else {
-      // StdIO transport - treat mcpServerUrl as command string
       const { command, args } = parseCommandString(mcpServerUrl!);
       mcpClient = await createMCPClient({
         transport: new StdioMCPTransport({
@@ -601,9 +454,9 @@ async function main() {
     console.log(`🤖 Running benchmark for model: ${modelId}`);
     console.log("═".repeat(50));
 
-    // Get pre-validated pricing for this model
-    const pricingLookup =
-      pricing.enabled ? (pricing.lookups.get(modelId) ?? null) : null;
+    const pricingLookup = pricing.enabled
+      ? (pricing.lookups.get(modelId) ?? null)
+      : null;
 
     if (pricingLookup) {
       const display = getModelPricingDisplay(pricingLookup.pricing);
@@ -612,11 +465,9 @@ async function main() {
       );
     }
 
-    // Get the model from gateway
     const model = gateway.languageModel(modelId);
 
-    // Run all tests
-    const testResults: SingleTestResult[] = [];
+    const testResults = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -635,7 +486,6 @@ async function main() {
 
     const totalDuration = Date.now() - startTime;
 
-    // Print summary
     console.log("\n" + "═".repeat(50));
     console.log("📊 Test Summary");
     console.log("═".repeat(50));
@@ -666,9 +516,8 @@ async function main() {
       `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
     );
 
-    // Calculate total cost if pricing is available
-    let totalCost: TotalCostInfo | null = null;
-    let pricingInfo: PricingInfo | null = null;
+    let totalCost = null;
+    let pricingInfo = null;
 
     if (pricingLookup) {
       totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
@@ -695,20 +544,17 @@ async function main() {
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
     }
 
-    // Ensure results directory exists
     const resultsDir = "results";
     if (!existsSync(resultsDir)) {
       mkdirSync(resultsDir, { recursive: true });
     }
 
-    // Generate timestamped filenames
-    const jsonFilename = getTimestampedFilename("result", "json");
-    const htmlFilename = getTimestampedFilename("result", "html");
+    const jsonFilename = getTimestampedFilename("result", "json", modelId);
+    const htmlFilename = getTimestampedFilename("result", "html", modelId);
     const jsonPath = `${resultsDir}/${jsonFilename}`;
     const htmlPath = `${resultsDir}/${htmlFilename}`;
 
-    // Build the result data
-    const resultData: MultiTestResultData = {
+    const resultData = {
       tests: testResults,
       metadata: {
         mcpEnabled,
@@ -722,18 +568,14 @@ async function main() {
       },
     };
 
-    // Save result JSON
     writeFileSync(jsonPath, JSON.stringify(resultData, null, 2));
     console.log(`\n✓ Results saved to ${jsonPath}`);
 
-    // Generate HTML report
     await generateReport(jsonPath, htmlPath);
   }
 
-  // Clean up outputs directory
   cleanupOutputsDirectory();
 
-  // Exit with appropriate code
   process.exit(totalFailed > 0 ? 1 : 0);
 }
 

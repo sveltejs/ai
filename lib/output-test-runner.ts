@@ -27,79 +27,56 @@ export interface TestVerificationResult {
   failedTests?: FailedTest[];
 }
 
-/**
- * Ensure the outputs directory exists and is clean
- */
-export function setupOutputsDirectory(): void {
+export function setupOutputsDirectory() {
   if (existsSync(OUTPUTS_DIR)) {
     rmSync(OUTPUTS_DIR, { recursive: true, force: true });
   }
   mkdirSync(OUTPUTS_DIR, { recursive: true });
 }
 
-/**
- * Clean up the outputs directory
- */
-export function cleanupOutputsDirectory(): void {
+export function cleanupOutputsDirectory() {
   if (existsSync(OUTPUTS_DIR)) {
     rmSync(OUTPUTS_DIR, { recursive: true, force: true });
   }
 }
 
-/**
- * Prepare the outputs directory for a specific test
- * - Creates a subdirectory for the test
- * - Copies the test.ts file
- * - Writes the LLM-generated component
- */
 export function prepareTestEnvironment(
   test: TestDefinition,
   componentCode: string,
-): string {
+) {
   const testDir = join(OUTPUTS_DIR, test.name);
 
-  // Create the test directory
   if (existsSync(testDir)) {
     rmSync(testDir, { recursive: true, force: true });
   }
   mkdirSync(testDir, { recursive: true });
 
-  // Write the LLM-generated component as Component.svelte
   const componentPath = join(testDir, "Component.svelte");
   writeFileSync(componentPath, componentCode, "utf-8");
 
-  // Copy the test file
   const testFilePath = join(testDir, "test.ts");
   copyFileSync(test.testFile, testFilePath);
 
   return testDir;
 }
 
-/**
- * Clean up a specific test's output directory
- */
-export function cleanupTestEnvironment(testName: string): void {
+export function cleanupTestEnvironment(testName: string) {
   const testDir = join(OUTPUTS_DIR, testName);
   if (existsSync(testDir)) {
     rmSync(testDir, { recursive: true, force: true });
   }
 }
 
-/**
- * Run vitest on the generated component and return the results
- */
 export async function runTestVerification(
   test: TestDefinition,
   componentCode: string,
-): Promise<TestVerificationResult> {
+) {
   const startTime = Date.now();
 
   try {
-    // Prepare the test environment
     const testDir = prepareTestEnvironment(test, componentCode);
     const testFilePath = join(testDir, "test.ts");
 
-    // Run vitest programmatically
     const vitest = await startVitest("test", [testFilePath], {
       watch: false,
       reporters: ["verbose"],
@@ -120,10 +97,9 @@ export async function runTestVerification(
     await vitest.close();
 
     const testModules = vitest.state.getTestModules();
-    const failedTests: FailedTest[] = [];
-    const allErrors: string[] = [];
+    const failedTests = [];
+    const allErrors = [];
 
-    // Get unhandled errors
     const unhandledErrors = vitest.state.getUnhandledErrors();
     for (const error of unhandledErrors) {
       const errorMessage =
@@ -131,7 +107,6 @@ export async function runTestVerification(
       allErrors.push(errorMessage);
     }
 
-    // Calculate success/failure
     let passed = true;
     let numTests = 0;
     let numFailed = 0;
@@ -154,7 +129,6 @@ export async function runTestVerification(
         passed = false;
       }
 
-      // Add module errors
       const moduleErrors = module.errors();
       for (const error of moduleErrors) {
         if (error.message) {
@@ -176,7 +150,6 @@ export async function runTestVerification(
           if (result.state === "failed") {
             numFailed++;
 
-            // Build full test name from ancestor titles
             const ancestorTitles: string[] = [];
             let parent = t.parent;
             while (parent && "name" in parent) {
@@ -195,7 +168,6 @@ export async function runTestVerification(
                 ? `${ancestorTitles.join(" > ")} > ${t.name}`
                 : t.name;
 
-            // Collect error messages
             const errorMessages: string[] = [];
             if (result.errors) {
               for (const testError of result.errors) {

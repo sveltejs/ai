@@ -11,12 +11,9 @@ export interface TestDefinition {
   prompt: string;
 }
 
-/**
- * Discover all test suites in the tests/ directory and load their prompts
- */
-export function discoverTests(): TestDefinition[] {
+export function discoverTests() {
   const testsDir = join(process.cwd(), "tests");
-  const definitions: TestDefinition[] = [];
+  const definitions = [];
 
   try {
     const entries = readdirSync(testsDir);
@@ -31,13 +28,11 @@ export function discoverTests(): TestDefinition[] {
         const promptFile = join(entryPath, "prompt.md");
         const componentFile = join(entryPath, "Component.svelte");
 
-        // Validate that required files exist
         if (
           existsSync(referenceFile) &&
           existsSync(testFile) &&
           existsSync(promptFile)
         ) {
-          // Load the prompt content
           const prompt = readFileSync(promptFile, "utf-8");
 
           definitions.push({
@@ -50,7 +45,7 @@ export function discoverTests(): TestDefinition[] {
             prompt,
           });
         } else {
-          const missing: string[] = [];
+          const missing = [];
           if (!existsSync(referenceFile)) missing.push("Reference.svelte");
           if (!existsSync(testFile)) missing.push("test.ts");
           if (!existsSync(promptFile)) missing.push("prompt.md");
@@ -62,16 +57,12 @@ export function discoverTests(): TestDefinition[] {
     console.error("Error discovering tests:", error);
   }
 
-  // Sort by name for consistent ordering
   definitions.sort((a, b) => a.name.localeCompare(b.name));
 
   return definitions;
 }
 
-/**
- * Build a prompt for the AI agent including the test requirements
- */
-export function buildAgentPrompt(test: TestDefinition): string {
+export function buildAgentPrompt(test: TestDefinition) {
   return `${test.prompt}
 
 IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`;

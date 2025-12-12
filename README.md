@@ -7,6 +7,7 @@ AI SDK benchmarking tool that tests AI agents with MCP (Model Context Protocol) 
 To install dependencies:
 
 ```bash
+./scripts/install.sh # installs the correct bun version
 bun install
 ```
 

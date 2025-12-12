@@ -22,7 +22,6 @@ export function testComponentTool(test: TestDefinition) {
       try {
         const result = await runTestVerification(test, content);
 
-        // Clean up the test environment after running
         cleanupTestEnvironment(test.name);
 
         if (result.passed) {
@@ -54,7 +53,6 @@ export function testComponentTool(test: TestDefinition) {
           };
         }
       } catch (error) {
-        // Ensure cleanup even on error
         cleanupTestEnvironment(test.name);
         console.log(`[TestComponent] ✗ Error running tests`);
         return {

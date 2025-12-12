@@ -1,6 +1,6 @@
 ## Project Overview
 
-AI SDK benchmarking tool built with Vercel AI SDK and Bun runtime. Tests AI agents with MCP (Model Context Protocol) server integration, specifically using the Svelte MCP server for agent benchmarks. Automatically discovers and runs all tests in the `tests/` directory and verifies generated components against test suites.
+AI SDK benchmarking tool built with Vercel AI SDK and Bun runtime. Tests AI agents with MCP (Model Context Protocol) server integration using the Vercel AI Gateway. Automatically discovers and runs all tests in the `tests/` directory and verifies LLM-generated Svelte components against test suites.
 
 ## Development Commands
 
@@ -8,20 +8,26 @@ AI SDK benchmarking tool built with Vercel AI SDK and Bun runtime. Tests AI agen
 # Install dependencies (runs patch-package automatically)
 bun install
 
-# Run main benchmark (discovers and runs all tests)
-bun run index.ts
+# Run the main benchmark (interactive CLI)
+bun run start
 
 # Verify reference implementations against test suites
 bun run verify-tests
 
-# Generate HTML report from most recent result
+# Generate HTML reports from all result JSON files
 bun run generate-report.ts
 
 # Generate HTML report from specific result file
 bun run generate-report.ts results/result-2024-12-07-14-30-45.json
 
+# Run unit tests for lib modules
+bun run test:self
+
 # Run TypeScript type checking
 bun tsc --noEmit
+
+# Format code with Prettier
+bun run prettier
 
 # Secrets management
 bun run secrets                       # Show token status
@@ -31,82 +37,32 @@ bun run secrets get VERCEL_OIDC_TOKEN           # Get Vercel token
 
 ## Environment Variables
 
-### MODEL Configuration
+### Vercel AI Gateway
 
-The `MODEL` environment variable determines which AI provider to use:
+The benchmark uses the Vercel AI Gateway for model access. Configuration:
 
-**Anthropic Direct API:**
+1. Link to a Vercel project with AI Gateway enabled: `bun run vercel:link`
+2. Pull environment variables: `bun run vercel:env:pull`
 
-```bash
-MODEL=anthropic/claude-haiku-4-5
-MODEL=anthropic/claude-sonnet-4
-```
+Required environment variable:
 
-**OpenAI Direct API:**
-
-```bash
-MODEL=openai/gpt-5
-MODEL=openai/gpt-5-mini
-MODEL=openai/gpt-4o
-```
-
-**OpenRouter (300+ models):**
-
-```bash
-MODEL=openrouter/anthropic/claude-sonnet-4
-MODEL=openrouter/google/gemini-pro
-MODEL=openrouter/meta-llama/llama-3.1-405b-instruct
-```
-
-**LM Studio (Local models via OpenAI-compatible API):**
-
-```bash
-MODEL=lmstudio/model-name
-```
-
-LM Studio runs a local OpenAI-compatible API server on `http://localhost:1234/v1`. Make sure LM Studio is running with a model loaded before using this provider.
+- `VERCEL_OIDC_TOKEN`: OIDC token for Vercel AI Gateway authentication
 
 ### MCP Server Configuration
 
-The `MCP_SERVER_URL` environment variable controls MCP (Model Context Protocol) integration. The tool automatically detects whether to use HTTP or StdIO transport based on the value format.
+MCP integration is configured via the interactive CLI at runtime. The CLI presents three options:
 
-**HTTP MCP Servers (Remote):**
+- **No MCP Integration**: Agent runs with built-in tools only
+- **MCP over HTTP**: Uses HTTP transport (default: `https://mcp.svelte.dev/mcp`)
+- **MCP over StdIO**: Uses local command (default: `npx -y @sveltejs/mcp`)
 
-```bash
-# Enable MCP with Svelte server (default for this benchmark)
-MCP_SERVER_URL=https://mcp.svelte.dev/mcp
-
-# Use a different HTTP MCP server
-MCP_SERVER_URL=https://your-mcp-server.com/mcp
-```
-
-**StdIO MCP Servers (Local):**
-
-For local MCP servers, simply provide the command string (any non-HTTP value):
-
-```bash
-# Use the default Svelte MCP server via npx
-MCP_SERVER_URL=npx -y @sveltejs/mcp
-
-# Use a custom local MCP server
-MCP_SERVER_URL=node path/to/your/mcp-server.js
-
-# Use with Bun runtime
-MCP_SERVER_URL=bun run src/mcp-server.ts --verbose
-```
-
-**Disable MCP:**
-
-```bash
-# Disable MCP integration (run without external tools)
-MCP_SERVER_URL=
-```
+You can provide custom MCP servers when prompted during the interactive setup.
 
 **Behavior:**
 
-- If `MCP_SERVER_URL` starts with `http://` or `https://`: Uses HTTP transport with that URL
-- If `MCP_SERVER_URL` is set but not an HTTP URL: Uses StdIO transport, treating the value as a command string
-- If `MCP_SERVER_URL` is empty or not set: Agent runs without MCP tools (only built-in tools)
+- If MCP server starts with `http://` or `https://`: Uses HTTP transport with that URL
+- If MCP server is set but not an HTTP URL: Uses StdIO transport, treating the value as a command string
+- If no MCP is selected: Agent runs without MCP tools (only built-in tools)
 - MCP transport type (HTTP or StdIO) and configuration are documented in the result JSON and HTML report
 
 ### Required API Keys
@@ -134,22 +90,42 @@ bun run secrets get VERCEL_OIDC_TOKEN
 - No plaintext tokens in files
 - User-level access control
 
-### Provider Routing
-
-The benchmark tool automatically routes to the correct provider based on the `MODEL` prefix:
-
-- `anthropic/*` → Direct Anthropic API
-- `openai/*` → Direct OpenAI API
-- `openrouter/*` → OpenRouter unified API
-- `lmstudio/*` → LM Studio local server (OpenAI-compatible)
-
-This allows switching models and providers without any code changes.
-
 ## Architecture
+
+### Directory Structure
+
+```
+├── index.ts                    # Main entry point with interactive CLI
+├── lib/
+│   ├── pricing.ts              # Cost calculation from gateway pricing
+│   ├── pricing.test.ts         # Unit tests for pricing module
+│   ├── test-discovery.ts       # Test suite discovery and prompt building
+│   ├── test-discovery.test.ts  # Unit tests for test discovery
+│   ├── output-test-runner.ts   # Vitest runner for component verification
+│   ├── output-test-runner.test.ts # Unit tests for output runner
+│   ├── verify-references.ts    # Reference implementation verification
+│   ├── report.ts               # Report generation orchestration
+│   ├── report-template.ts      # HTML report template generation
+│   ├── report-styles.ts        # CSS styles for HTML reports
+│   └── tools/
+│       ├── index.ts            # Tool exports
+│       ├── result-write.ts     # ResultWrite tool for final output
+│       ├── result-write.test.ts # Unit tests for ResultWrite tool
+│       ├── test-component.ts   # TestComponent tool for iterative testing
+│       └── test-component.test.ts # Unit tests for TestComponent tool
+├── tests/                      # Benchmark test suites
+│   └── {test-name}/
+│       ├── Reference.svelte    # Reference implementation
+│       ├── test.ts             # Vitest test file
+│       └── prompt.md           # Agent prompt
+├── results/                    # Benchmark results (JSON + HTML)
+├── outputs/                    # Temporary directory for test verification
+└── patches/                    # Patches for dependencies
+```
 
 ### Test Suite Structure
 
-Test suites are organized in the `tests/` directory with the following structure:
+Benchmark test suites in `tests/` directory:
 
 ```
 tests/
@@ -161,35 +137,66 @@ tests/
 
 **Benchmark Workflow:**
 
-1. `index.ts` discovers all test suites in `tests/`
-2. For each test:
+1. `index.ts` presents interactive CLI for model/MCP selection
+2. Discovers all test suites in `tests/`
+3. For each selected model and test:
    - Loads `prompt.md` and builds agent prompt
-   - Agent generates component code based on the prompt
+   - Agent generates component code using available tools
    - Agent calls `ResultWrite` tool with the component code
    - Component is written to `outputs/{test-name}/Component.svelte`
    - Test file is copied to `outputs/{test-name}/test.ts`
    - Vitest runs tests against the generated component
    - Results are collected (pass/fail, error messages)
    - Output directory is cleaned up
-3. All results are saved to a timestamped JSON file
-4. HTML report is generated with expandable sections for each test
+4. All results are saved to timestamped JSON file
+5. HTML report is generated with expandable sections for each test
 
-**Reference Verification:**
+### Agent Tools
 
-- Run `bun run verify-tests` to validate reference implementations
-- Each test file imports `Component.svelte` (not Reference.svelte directly)
-- Verification system temporarily copies Reference.svelte → Component.svelte
-- Tests use `@testing-library/svelte` for component testing
-- Tests use `data-testid` attributes for element selection
+**ResultWrite** (`lib/tools/result-write.ts`):
+
+- Called when agent completes component implementation
+- Signals the agent to stop (via `stopWhen` configuration)
+- Accepts `content` parameter with Svelte component code
+
+**TestComponent** (`lib/tools/test-component.ts`):
+
+- Optional tool for iterative development
+- Runs component against test suite before final submission
+- Returns pass/fail status and detailed error messages
+- Enabled/disabled via interactive CLI
+
+### Interactive CLI
+
+The benchmark uses `@clack/prompts` for an interactive CLI that prompts for:
+
+1. **Model Selection**: Multi-select from Vercel AI Gateway available models
+2. **MCP Integration**: Choose HTTP, StdIO, or no MCP
+3. **TestComponent Tool**: Enable/disable iterative testing tool
+4. **Pricing Confirmation**: Review and confirm cost calculation settings
+
+### Pricing System
+
+The pricing module (`lib/pricing.ts`) handles cost calculation:
+
+- Extracts pricing from Vercel AI Gateway model metadata
+- Calculates costs based on input/output/cached tokens
+- Supports cache read billing at reduced rates
+- Displays costs in reports with per-million-token rates
+
+Key functions:
+
+- `extractPricingFromGatewayModel()`: Parse gateway model pricing
+- `buildPricingMap()`: Build lookup map from gateway models
+- `calculateCost()`: Calculate total cost from token usage
+- `formatCost()` / `formatMTokCost()`: Format costs for display
 
 ### Key Technologies
 
 - **Vercel AI SDK v5**: Agent framework with tool calling
-- **@ai-sdk/anthropic**: Anthropic provider for direct API access
-- **@ai-sdk/openai**: OpenAI provider for direct API access
-- **@ai-sdk/openai-compatible**: OpenAI-compatible provider for LM Studio and other local servers
-- **@openrouter/ai-sdk-provider**: OpenRouter provider for unified access to 300+ models
+- **Vercel AI Gateway**: Unified access to multiple AI providers
 - **@ai-sdk/mcp**: MCP client integration (with custom patch)
+- **@clack/prompts**: Interactive CLI prompts
 - **Bun Runtime**: JavaScript runtime (not Node.js)
 - **Vitest**: Test framework for component testing
 - **@testing-library/svelte**: Testing utilities for Svelte components
@@ -199,33 +206,34 @@ tests/
 The project uses `@ai-sdk/mcp` with a custom patch applied via `patch-package`:
 
 - Patch location: `patches/@ai-sdk+mcp+0.0.11.patch`
-- Fixes: Handles missing event types in HTTP SSE responses by treating undefined events as "message" events
-- MCP server: Configurable via `MCP_SERVER_URL` environment variable
-- Default server: Svelte documentation server (`https://mcp.svelte.dev/mcp`)
-- Can be disabled by leaving `MCP_SERVER_URL` empty
+- Fixes: Handles missing event types in HTTP SSE responses
+- Supports both HTTP and StdIO transports
+- Configuration via interactive CLI at runtime
 
 ### Data Flow
 
-1. Test discovery scans `tests/` directory for valid test suites
-2. For each test:
-   a. Agent receives prompt with access to tools (built-in + optional MCP tools)
+1. Interactive CLI collects configuration (models, MCP, tools)
+2. Gateway provides available models and pricing
+3. Test discovery scans `tests/` directory
+4. For each model and test:
+   a. Agent receives prompt with access to tools (built-in + optional MCP)
    b. Agent iterates through steps, calling tools as needed
-   c. Agent stops when `ResultWrite` tool is called with component code
+   c. Agent stops when `ResultWrite` tool is called
    d. Component is written to `outputs/{test-name}/Component.svelte`
    e. Vitest runs test file against the generated component
    f. Test results are collected (pass/fail, error details)
    g. Output directory is cleaned up
-3. All results aggregated into multi-test result object
-4. Results written to `results/result-YYYY-MM-DD-HH-MM-SS.json` with metadata
-5. HTML report generated at `results/result-YYYY-MM-DD-HH-MM-SS.html`
-6. Report automatically opens in default browser
+5. Results aggregated with pricing calculations
+6. Results written to `results/result-YYYY-MM-DD-HH-MM-SS.json`
+7. HTML report generated at `results/result-YYYY-MM-DD-HH-MM-SS.html`
+8. Report automatically opens in default browser
 
 ### Output Files
 
 All results are saved in the `results/` directory with timestamped filenames:
 
-- **JSON files**: `result-2024-12-07-14-30-45.json` - Complete execution trace with all test results
-- **HTML files**: `result-2024-12-07-14-30-45.html` - Interactive visualization with expandable test sections
+- **JSON files**: `result-2024-12-07-14-30-45.json` - Complete execution trace
+- **HTML files**: `result-2024-12-07-14-30-45.html` - Interactive visualization
 
 **Multi-Test Result JSON Structure:**
 
@@ -246,25 +254,44 @@ All results are saved in the `results/` directory with timestamped filenames:
         "duration": 150,
         "failedTests": []
       }
-    },
-    ...
+    }
   ],
   "metadata": {
     "mcpEnabled": true,
     "mcpServerUrl": "https://mcp.svelte.dev/mcp",
+    "mcpTransportType": "HTTP",
     "timestamp": "2024-12-07T14:30:45.123Z",
-    "model": "anthropic/claude-sonnet-4"
+    "model": "anthropic/claude-sonnet-4",
+    "pricingKey": "anthropic/claude-sonnet-4",
+    "pricing": {
+      "inputCostPerMTok": 3,
+      "outputCostPerMTok": 15,
+      "cacheReadCostPerMTok": 0.3
+    },
+    "totalCost": {
+      "inputCost": 0.003,
+      "outputCost": 0.015,
+      "cacheReadCost": 0.0003,
+      "totalCost": 0.0183,
+      "inputTokens": 1000,
+      "outputTokens": 1000,
+      "cachedInputTokens": 1000
+    }
   }
 }
 ```
 
-This naming convention allows you to:
+## Unit Tests
 
-- Run multiple benchmarks without overwriting previous results
-- Easily identify when each benchmark was run
-- Compare results across different runs
-- Track whether MCP was enabled for each run
-- See per-test verification status
+Unit tests for library modules are in `lib/*.test.ts`:
+
+- `lib/pricing.test.ts` - Pricing extraction, calculation, formatting
+- `lib/test-discovery.test.ts` - Test suite discovery and prompt building
+- `lib/output-test-runner.test.ts` - Output directory management
+- `lib/tools/result-write.test.ts` - ResultWrite tool behavior
+- `lib/tools/test-component.test.ts` - TestComponent tool behavior
+
+Run unit tests with: `bun run test:self`
 
 ## TypeScript Configuration
 
@@ -281,12 +308,13 @@ This naming convention allows you to:
 
 - The MCP client import uses a direct path to the patched module: `./node_modules/@ai-sdk/mcp/dist/index.mjs`
 - Agent stops execution when the `ResultWrite` tool is called (configured via `stopWhen` option)
+- Agent also stops after 10 steps maximum (configured via `stepCountIs(10)`)
 - The `outputs/` directory is used temporarily for test verification and is cleaned up after each test
 - HTML reports include expandable sections for each test with full step details
 - Test verification results show pass/fail status and failed test details
 - Token usage includes cached token counts when available
 - All result files are saved with timestamps to preserve historical benchmarks
-- MCP integration can be toggled via `MCP_SERVER_URL` environment variable without code changes
+- MCP integration can be configured via interactive CLI without code changes
 - MCP status is clearly indicated in both the JSON metadata and HTML report with a visual badge
 - Exit code is 0 if all tests pass, 1 if any tests fail
-- LM Studio provider requires LM Studio to be running locally with a model loaded
+- Pricing is fetched from Vercel AI Gateway model metadata at runtime
