@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
+import type { CacheSimulation } from "./pricing.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
 
 interface TextBlock {
@@ -90,6 +91,7 @@ interface Metadata {
   pricingKey?: string | null;
   pricing?: PricingInfo | null;
   totalCost?: TotalCostInfo | null;
+  cacheSimulation?: CacheSimulation | null;
 }
 
 export interface SingleTestResult {

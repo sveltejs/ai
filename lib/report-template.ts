@@ -306,6 +306,35 @@ function renderPricingSection(data: MultiTestResultData) {
     `;
   }
 
+  let cacheSimulationHtml = "";
+  if (
+    totalCost &&
+    data.metadata.cacheSimulation &&
+    pricing?.cacheReadCostPerMTok !== undefined
+  ) {
+    const sim = data.metadata.cacheSimulation;
+    cacheSimulationHtml = `
+      <div class="cache-simulation">
+        <div class="cache-simulation-header">
+          <span class="cache-icon">⚡</span>
+          <span class="cache-title">Pricing with token cache enabled (estimation)</span>
+        </div>
+        <div class="cache-simulation-content">
+          <div class="cost-row">
+            <span class="cost-label">Total cost with cache:</span>
+            <span class="cost-tokens"></span>
+            <span class="cost-value">${formatCost(sim.simulatedCostWithCache)}</span>
+          </div>
+          <div class="cost-row savings">
+            <span class="cost-label">Potential savings:</span>
+            <span class="cost-tokens"></span>
+            <span class="cost-value">${formatCost(sim.potentialSavings)} (${sim.savingsPercentage.toFixed(1)}%)</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="pricing-section">
       <div class="pricing-header">
@@ -314,6 +343,7 @@ function renderPricingSection(data: MultiTestResultData) {
       </div>
       ${pricingInfoHtml}
       ${costBreakdownHtml}
+      ${cacheSimulationHtml}
     </div>
   `;
 }
@@ -426,6 +456,40 @@ function getPricingStyles() {
     .cost-row.total .cost-value {
       color: var(--success);
       font-size: 15px;
+    }
+
+    .cache-simulation {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .cache-simulation-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .cache-icon {
+      font-size: 14px;
+    }
+
+    .cache-title {
+      font-weight: 500;
+    }
+
+    .cache-simulation-content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cache-simulation .cost-row.savings .cost-value {
+      color: var(--success);
+      font-weight: 600;
     }
   `;
 }

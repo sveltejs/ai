@@ -525,6 +525,7 @@ async function main() {
 
     let totalCost = null;
     let pricingInfo = null;
+    let cacheSimulation = null;
 
     if (pricingLookup) {
       totalCost = calculateTotalCost(testResults, pricingLookup.pricing);
@@ -551,7 +552,7 @@ async function main() {
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
 
       // Simulate cache savings
-      const cacheSimulation = simulateCacheSavings(
+      cacheSimulation = simulateCacheSavings(
         testResults,
         pricingLookup.pricing,
       );
@@ -594,6 +595,7 @@ async function main() {
         pricingKey: pricingLookup?.matchedKey ?? null,
         pricing: pricingInfo,
         totalCost,
+        cacheSimulation,
       },
     };
 
