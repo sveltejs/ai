@@ -15,6 +15,15 @@ export interface CostCalculation {
   cachedInputTokens: number;
 }
 
+export interface CacheSimulation {
+  actualCost: number;
+  simulatedCostWithCache: number;
+  potentialSavings: number;
+  savingsPercentage: number;
+  cacheableTokens: number;
+  cacheHits: number;
+}
+
 export interface ModelPricingDisplay {
   inputCostPerMTok: number;
   outputCostPerMTok: number;
@@ -126,22 +135,22 @@ export function calculateCost(
   outputTokens: number,
   cachedInputTokens: number = 0,
 ) {
-  const uncachedInputTokens = inputTokens - cachedInputTokens;
-  const inputCost = uncachedInputTokens * pricing.inputCostPerToken;
+  // inputTokens is already the total input (no caching enabled)
+  const inputCost = inputTokens * pricing.inputCostPerToken;
 
   const outputCost = outputTokens * pricing.outputCostPerToken;
 
-  const cacheReadCost =
-    cachedInputTokens * (pricing.cacheReadInputTokenCost ?? 0);
+  // No caching enabled, so no cache read cost
+  const cacheReadCost = 0;
 
   return {
     inputCost,
     outputCost,
     cacheReadCost,
-    totalCost: inputCost + outputCost + cacheReadCost,
+    totalCost: inputCost + outputCost,
     inputTokens,
     outputTokens,
-    cachedInputTokens,
+    cachedInputTokens: 0,
   };
 }
 

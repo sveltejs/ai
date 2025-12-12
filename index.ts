@@ -9,6 +9,7 @@ import {
   extractResultWriteContent,
   calculateTotalCost,
   buildAgentPrompt,
+  simulateCacheSavings,
 } from "./lib/utils.ts";
 import { discoverTests, type TestDefinition } from "./lib/test-discovery.ts";
 import {
@@ -58,7 +59,11 @@ async function validateAndConfirmPricing(
     const pricingLines = models.map((modelId) => {
       const lookup = lookups.get(modelId)!;
       const display = getModelPricingDisplay(lookup.pricing);
-      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`;
+      const cacheText =
+        display.cacheReadCostPerMTok !== undefined
+          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cached`
+          : "";
+      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheText}`;
     });
 
     note(pricingLines.join("\n\n"), "💰 Pricing Found");
@@ -90,8 +95,12 @@ async function validateAndConfirmPricing(
       for (const modelId of modelsWithPricing) {
         const lookup = lookups.get(modelId)!;
         const display = getModelPricingDisplay(lookup.pricing);
+        const cacheText =
+          display.cacheReadCostPerMTok !== undefined
+            ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cached`
+            : "";
         lines.push(
-          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in)`,
+          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheText})`,
         );
       }
     }
@@ -379,9 +388,13 @@ async function main() {
     const lookup = pricing.lookups.get(modelId);
     if (pricing.enabled && lookup) {
       const display = getModelPricingDisplay(lookup.pricing);
+      const cacheText =
+        display.cacheReadCostPerMTok !== undefined
+          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cached`
+          : "";
       console.log(`   ${modelId}`);
       console.log(
-        `      💰 ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`,
+        `      💰 ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheText}`,
       );
     } else {
       console.log(`   ${modelId}`);
@@ -450,8 +463,12 @@ async function main() {
 
     if (pricingLookup) {
       const display = getModelPricingDisplay(pricingLookup.pricing);
+      const cacheText =
+        display.cacheReadCostPerMTok !== undefined
+          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cached`
+          : "";
       console.log(
-        `💰 Pricing: ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out`,
+        `💰 Pricing: ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheText}`,
       );
     }
 
@@ -532,6 +549,28 @@ async function main() {
         );
       }
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
+
+      // Simulate cache savings
+      const cacheSimulation = simulateCacheSavings(
+        testResults,
+        pricingLookup.pricing,
+      );
+      if (cacheSimulation.cacheHits > 0) {
+        console.log("\n📊 Cache Simulation (if enabled):");
+        console.log("─".repeat(50));
+        console.log(
+          `Cacheable tokens: ${cacheSimulation.cacheableTokens.toLocaleString()} (from initial prompts)`,
+        );
+        console.log(
+          `Cache hits: ${cacheSimulation.cacheHits.toLocaleString()} (subsequent steps)`,
+        );
+        console.log(
+          `Simulated cost with cache: ${formatCost(cacheSimulation.simulatedCostWithCache)}`,
+        );
+        console.log(
+          `Potential savings: ${formatCost(cacheSimulation.potentialSavings)} (${cacheSimulation.savingsPercentage.toFixed(1)}%)`,
+        );
+      }
     }
 
     const resultsDir = "results";
