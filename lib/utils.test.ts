@@ -4,8 +4,8 @@ import {
   getTimestampedFilename,
   calculateTotalCost,
   simulateCacheSavings,
-  TokenCache,
 } from "./utils.ts";
+import { TokenCache } from "./token-cache.ts";
 import { extractPricingFromGatewayModel } from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
 
