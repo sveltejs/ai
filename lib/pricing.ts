@@ -48,7 +48,10 @@ export function extractPricingFromGatewayModel(
 export function buildPricingMap(models: GatewayLanguageModelEntry[]) {
   const map = new Map<
     string,
-    { pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>; matchedKey: string } | null
+    {
+      pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+      matchedKey: string;
+    } | null
   >();
 
   for (const model of models) {
@@ -107,18 +110,13 @@ export function calculateCost(
     ? cachedInputTokens * pricing.cacheReadInputTokenCost
     : 0;
 
-  // Cache creation cost is not tracked in actual usage - it's part of input cost
-  // This field is here for consistency but will be 0 for actual cost calculations
-  const cacheCreationCost = 0;
-
   const outputCost = outputTokens * pricing.outputCostPerToken;
 
   return {
     inputCost,
     outputCost,
     cacheReadCost,
-    cacheCreationCost,
-    totalCost: inputCost + outputCost + cacheReadCost + cacheCreationCost,
+    totalCost: inputCost + outputCost + cacheReadCost,
     inputTokens,
     outputTokens,
     cachedInputTokens,

@@ -217,7 +217,6 @@ describe("calculateCost", () => {
       expect(result.inputCost).toBe(0.003); // 1000 * $3/MTok
       expect(result.outputCost).toBeCloseTo(0.0075); // 500 * $15/MTok
       expect(result.cacheReadCost).toBe(0);
-      expect(result.cacheCreationCost).toBe(0);
       expect(result.totalCost).toBe(0.0105);
     });
 
@@ -269,7 +268,6 @@ describe("calculateCost", () => {
       expect(result.inputCost).toBe(0);
       expect(result.outputCost).toBe(0);
       expect(result.cacheReadCost).toBe(0);
-      expect(result.cacheCreationCost).toBe(0);
       expect(result.totalCost).toBe(0);
     });
 

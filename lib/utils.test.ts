@@ -4,6 +4,7 @@ import {
   getTimestampedFilename,
   calculateTotalCost,
   simulateCacheSavings,
+  TokenCache,
 } from "./utils.ts";
 import { extractPricingFromGatewayModel } from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
@@ -119,7 +120,6 @@ describe("calculateTotalCost", () => {
       inputCost: 0,
       outputCost: 0,
       cacheReadCost: 0,
-      cacheCreationCost: 0,
       totalCost: 0,
       inputTokens: 0,
       outputTokens: 0,
@@ -185,12 +185,127 @@ describe("calculateTotalCost", () => {
       inputCost: 0.00057,
       outputCost: 0.0006,
       cacheReadCost: 0.000003,
-      cacheCreationCost: 0,
       totalCost: 0.001173,
       inputTokens: 600,
       outputTokens: 300,
       cachedInputTokens: 30,
     });
+  });
+});
+
+describe("TokenCache", () => {
+  const pricing = {
+    inputCostPerToken: 1.0 / 1_000_000,
+    outputCostPerToken: 2.0 / 1_000_000,
+    cacheReadInputTokenCost: 0.1 / 1_000_000,
+  } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+  it("initializes with correct values", () => {
+    const cache = new TokenCache(100, pricing);
+    const stats = cache.getCacheStats();
+
+    expect(stats.totalCachedTokens).toBe(0);
+    expect(stats.currentContextTokens).toBe(100);
+    expect(stats.messageCount).toBe(0);
+  });
+
+  it("accumulates cached tokens correctly", () => {
+    const cache = new TokenCache(100, pricing);
+
+    cache.addMessage("What is JavaScript?", 50);
+    let stats = cache.getCacheStats();
+    expect(stats.totalCachedTokens).toBe(100); // 100 from initial
+    expect(stats.currentContextTokens).toBe(150); // 100 + 50
+    expect(stats.messageCount).toBe(1);
+
+    cache.addMessage("JavaScript is...", 200);
+    stats = cache.getCacheStats();
+    expect(stats.totalCachedTokens).toBe(250); // 100 + 150
+    expect(stats.currentContextTokens).toBe(350); // 150 + 200
+    expect(stats.messageCount).toBe(2);
+
+    cache.addMessage("Can you give an example?", 30);
+    stats = cache.getCacheStats();
+    expect(stats.totalCachedTokens).toBe(600); // 100 + 150 + 350
+    expect(stats.currentContextTokens).toBe(380); // 350 + 30
+    expect(stats.messageCount).toBe(3);
+  });
+
+  it("tracks output tokens separately", () => {
+    const cache = new TokenCache(100, pricing);
+
+    cache.addMessage("msg1", 50, 200);
+    cache.addMessage("msg2", 30, 150);
+
+    const stats = cache.getCacheStats();
+    expect(stats.totalCachedTokens).toBe(250); // 100 + 150
+    expect(stats.currentContextTokens).toBe(180); // 100 + 50 + 30
+  });
+
+  it("calculates cost with pricing", () => {
+    const cache = new TokenCache(100, pricing);
+
+    cache.addMessage("msg1", 50, 200);
+    cache.addMessage("msg2", 100, 300);
+
+    const cost = cache.calculateCost();
+
+    // totalCachedTokens = 100 + 150 = 250
+    // currentTokens = 250
+    // totalOutputTokens = 200 + 300 = 500
+
+    // cacheReadCost = 250 * 0.1e-6 = 0.000025
+    // inputCost = 250 * 1e-6 = 0.00025
+    // outputCost = 500 * 2e-6 = 0.001
+    // simulatedCost = 0.000025 + 0.00025 + 0.001 = 0.001275
+
+    expect(cost.cacheReadCost).toBeCloseTo(0.000025, 6);
+    expect(cost.inputCost).toBeCloseTo(0.00025, 6);
+    expect(cost.outputCost).toBeCloseTo(0.001, 6);
+    expect(cost.simulatedCost).toBeCloseTo(0.001275, 6);
+  });
+
+  it("calculates zero cost without pricing", () => {
+    const cache = new TokenCache(100);
+
+    cache.addMessage("msg1", 50, 200);
+
+    const cost = cache.calculateCost();
+
+    expect(cost.cacheReadCost).toBe(0);
+    expect(cost.inputCost).toBe(0);
+    expect(cost.outputCost).toBe(0);
+    expect(cost.simulatedCost).toBe(0);
+  });
+
+  it("uses default cache read rate when not specified", () => {
+    const pricingWithoutCacheRead = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const cache = new TokenCache(100, pricingWithoutCacheRead);
+    cache.addMessage("msg1", 50, 100);
+
+    const cost = cache.calculateCost();
+
+    // Default cache read rate = 10% of input cost = 0.1 * 1e-6 = 0.1e-6
+    // totalCachedTokens = 100
+    // cacheReadCost = 100 * 0.1e-6 = 0.00001
+
+    expect(cost.cacheReadCost).toBeCloseTo(0.00001, 6);
+  });
+
+  it("handles zero tokens", () => {
+    const cache = new TokenCache(0, pricing);
+    const stats = cache.getCacheStats();
+
+    expect(stats.totalCachedTokens).toBe(0);
+    expect(stats.currentContextTokens).toBe(0);
+    expect(stats.messageCount).toBe(0);
+
+    const cost = cache.calculateCost();
+    expect(cost.simulatedCost).toBe(0);
   });
 });
 

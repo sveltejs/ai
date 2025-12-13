@@ -80,7 +80,6 @@ export function calculateTotalCost(
     inputCost: costResult.inputCost,
     outputCost: costResult.outputCost,
     cacheReadCost: costResult.cacheReadCost,
-    cacheCreationCost: costResult.cacheCreationCost,
     totalCost: costResult.totalCost,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
@@ -97,6 +96,76 @@ export function buildAgentPrompt(test: TestDefinition): ModelMessage[] {
 IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`,
     },
   ];
+}
+
+export class TokenCache {
+  private currentTokens: number;
+  private totalCachedTokens: number = 0;
+  private messages: Array<{ message: string; tokens: number }> = [];
+  private pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>> | null;
+  private totalOutputTokens: number = 0;
+
+  constructor(
+    tokens: number,
+    pricing?: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>> | null,
+  ) {
+    this.currentTokens = tokens;
+    this.pricing = pricing ?? null;
+  }
+
+  addMessage(message: string, tokens: number, outputTokens: number = 0): void {
+    // The existing tokens are served from cache on this call
+    this.totalCachedTokens += this.currentTokens;
+
+    // Now add the new message to our running total
+    this.currentTokens += tokens;
+    this.totalOutputTokens += outputTokens;
+    this.messages.push({ message, tokens });
+  }
+
+  getCacheStats() {
+    return {
+      totalCachedTokens: this.totalCachedTokens,
+      currentContextTokens: this.currentTokens,
+      messageCount: this.messages.length,
+    };
+  }
+
+  calculateCost(): {
+    simulatedCost: number;
+    cacheReadCost: number;
+    inputCost: number;
+    outputCost: number;
+  } {
+    if (!this.pricing) {
+      return {
+        simulatedCost: 0,
+        cacheReadCost: 0,
+        inputCost: 0,
+        outputCost: 0,
+      };
+    }
+
+    const cacheReadRate =
+      this.pricing.cacheReadInputTokenCost ??
+      this.pricing.inputCostPerToken * 0.1;
+
+    // Cached tokens at cache read rate
+    const cacheReadCost = this.totalCachedTokens * cacheReadRate;
+
+    // Current tokens (uncached portion) at full input rate
+    const inputCost = this.currentTokens * this.pricing.inputCostPerToken;
+
+    // Output tokens at output rate
+    const outputCost = this.totalOutputTokens * this.pricing.outputCostPerToken;
+
+    return {
+      simulatedCost: cacheReadCost + inputCost + outputCost,
+      cacheReadCost,
+      inputCost,
+      outputCost,
+    };
+  }
 }
 
 /**
@@ -130,49 +199,44 @@ export function simulateCacheSavings(
   let totalCacheableTokens = 0; // Tokens written to cache in step 1 of each test
   let totalCacheHits = 0; // Total tokens read from cache across all steps
   let totalCacheWriteTokens = 0; // Total tokens written to cache (including extensions)
-  let actualCost = 0;
   let simulatedCost = 0;
 
   for (const test of tests) {
     if (test.steps.length === 0) continue;
 
-    let previousInput = 0;
+    const firstStep = test.steps[0];
+    if (!firstStep) continue;
 
-    for (let i = 0; i < test.steps.length; i++) {
+    // Create cache with first step's input tokens
+    const cache = new TokenCache(firstStep.usage.inputTokens, pricing);
+    totalCacheableTokens += firstStep.usage.inputTokens;
+    totalCacheWriteTokens += firstStep.usage.inputTokens;
+
+    // First step: pay cache creation rate for all input
+    simulatedCost += firstStep.usage.inputTokens * cacheWriteRate;
+    simulatedCost += firstStep.usage.outputTokens * pricing.outputCostPerToken;
+
+    // Add output tokens for first step (but no new input tokens yet)
+    cache.addMessage("step-0", 0, firstStep.usage.outputTokens);
+
+    // Process subsequent steps
+    for (let i = 1; i < test.steps.length; i++) {
       const step = test.steps[i];
       if (!step) continue;
 
-      const inputTokens = step.usage.inputTokens;
-      const outputTokens = step.usage.outputTokens;
+      const stats = cache.getCacheStats();
+      const cachedPortion = stats.currentContextTokens;
+      const newTokens = Math.max(0, step.usage.inputTokens - cachedPortion);
 
-      // Actual cost (no caching) - all input at full rate
-      actualCost += inputTokens * pricing.inputCostPerToken;
-      actualCost += outputTokens * pricing.outputCostPerToken;
+      totalCacheHits += cachedPortion;
+      totalCacheWriteTokens += newTokens;
 
-      if (i === 0) {
-        // First step: pay cache creation rate for all input (to prime the cache)
-        simulatedCost += inputTokens * cacheWriteRate;
-        totalCacheableTokens += inputTokens;
-        totalCacheWriteTokens += inputTokens;
-      } else {
-        // Subsequent steps:
-        // - Previous step's input is cached (pay cache read rate)
-        // - New tokens extend the cache (pay cache creation rate)
-        const cachedPortion = previousInput;
-        const newPortion = Math.max(0, inputTokens - previousInput);
+      // Calculate cost for this step
+      simulatedCost += cachedPortion * cacheReadRate;
+      simulatedCost += newTokens * cacheWriteRate;
+      simulatedCost += step.usage.outputTokens * pricing.outputCostPerToken;
 
-        simulatedCost += cachedPortion * cacheReadRate;
-        simulatedCost += newPortion * cacheWriteRate;
-
-        totalCacheHits += cachedPortion;
-        totalCacheWriteTokens += newPortion;
-      }
-
-      // Output tokens always paid at full rate
-      simulatedCost += outputTokens * pricing.outputCostPerToken;
-
-      // This step's input becomes the cached prefix for the next step
-      previousInput = inputTokens;
+      cache.addMessage(`step-${i}`, newTokens, step.usage.outputTokens);
     }
   }
 

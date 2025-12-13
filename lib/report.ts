@@ -77,7 +77,6 @@ export interface TotalCostInfo {
   inputCost: number;
   outputCost: number;
   cacheReadCost: number;
-  cacheCreationCost: number;
   totalCost: number;
   inputTokens: number;
   outputTokens: number;
