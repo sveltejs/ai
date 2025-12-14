@@ -19,13 +19,15 @@ import {
   runTestVerification,
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
+import { getModelPricingDisplay, formatCost, formatMTokCost } from "./lib/pricing.ts";
 import {
-  buildPricingMap,
-  lookupPricingFromMap,
-  getModelPricingDisplay,
-  formatCost,
-  formatMTokCost,
-} from "./lib/pricing.ts";
+  gateway,
+  getGatewayModelsAndPricing,
+  selectModelsFromGateway,
+  type PricingMap,
+  type PricingLookup,
+  type PricingResult,
+} from "./lib/providers/ai-gateway.ts";
 import {
   configureLMStudio,
   selectModelsFromLMStudio,
@@ -34,114 +36,14 @@ import {
   type LMStudioConfig,
 } from "./lib/providers/lmstudio.ts";
 import type { LanguageModel } from "ai";
-import {
-  intro,
-  multiselect,
-  isCancel,
-  cancel,
-  text,
-  select,
-  confirm,
-  note,
-} from "@clack/prompts";
-import { gateway } from "ai";
+import { intro, isCancel, cancel, select, confirm, text } from "@clack/prompts";
+import { buildPricingMap } from "./lib/pricing.ts";
 
 type ProviderType = "gateway" | "lmstudio";
 
 interface ProviderConfig {
   type: ProviderType;
   lmstudio?: LMStudioConfig;
-}
-
-async function validateAndConfirmPricing(
-  models: string[],
-  pricingMap: ReturnType<typeof buildPricingMap>,
-) {
-  const lookups = new Map<string, ReturnType<typeof lookupPricingFromMap>>();
-
-  for (const modelId of models) {
-    const lookup = lookupPricingFromMap(modelId, pricingMap);
-    lookups.set(modelId, lookup);
-  }
-
-  const modelsWithPricing = models.filter((m) => lookups.get(m) !== null);
-  const modelsWithoutPricing = models.filter((m) => lookups.get(m) === null);
-
-  if (modelsWithoutPricing.length === 0) {
-    const pricingLines = models.map((modelId) => {
-      const lookup = lookups.get(modelId)!;
-      const display = getModelPricingDisplay(lookup.pricing);
-      const cacheReadText =
-        display.cacheReadCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-          : "";
-      const cacheWriteText =
-        display.cacheCreationCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-          : "";
-      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText}`;
-    });
-
-    note(pricingLines.join("\n\n"), "💰 Pricing Found");
-
-    const usePricing = await confirm({
-      message: "Enable cost calculation?",
-      initialValue: true,
-    });
-
-    if (isCancel(usePricing)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    return { enabled: usePricing, lookups };
-  } else {
-    const lines: string[] = [];
-
-    if (modelsWithoutPricing.length > 0) {
-      lines.push("No pricing found for:");
-      for (const modelId of modelsWithoutPricing) {
-        lines.push(`  ✗ ${modelId}`);
-      }
-    }
-
-    if (modelsWithPricing.length > 0) {
-      lines.push("");
-      lines.push("Pricing available for:");
-      for (const modelId of modelsWithPricing) {
-        const lookup = lookups.get(modelId)!;
-        const display = getModelPricingDisplay(lookup.pricing);
-        const cacheReadText =
-          display.cacheReadCostPerMTok !== undefined
-            ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-            : "";
-        const cacheWriteText =
-          display.cacheCreationCostPerMTok !== undefined
-            ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-            : "";
-        lines.push(
-          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText})`,
-        );
-      }
-    }
-
-    lines.push("");
-    lines.push("Cost calculation will be disabled.");
-
-    note(lines.join("\n"), "⚠️  Pricing Incomplete");
-
-    const proceed = await confirm({
-      message: "Continue without pricing?",
-      initialValue: true,
-    });
-
-    if (isCancel(proceed) || !proceed) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    return { enabled: false, lookups };
-  }
 }
 
 async function selectProvider(): Promise<ProviderConfig> {
@@ -175,65 +77,18 @@ async function selectProvider(): Promise<ProviderConfig> {
   return { type: "gateway" };
 }
 
-async function selectModelsFromGateway(
-  pricingMap: ReturnType<typeof buildPricingMap>,
-) {
-  const available_models = await gateway.getAvailableModels();
-
-  const models = await multiselect({
-    message: "Select model(s) to benchmark",
-    options: [{ value: "custom", label: "Custom" }].concat(
-      available_models.models.reduce<Array<{ value: string; label: string }>>(
-        (arr, model) => {
-          if (model.modelType === "language") {
-            arr.push({ value: model.id, label: model.name });
-          }
-          return arr;
-        },
-        [],
-      ),
-    ),
-  });
-
-  if (isCancel(models)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
-
-  if (models.includes("custom")) {
-    const custom_model = await text({
-      message: "Enter custom model id",
-    });
-    if (isCancel(custom_model)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-    models.push(custom_model);
-  }
-
-  const selectedModels = models.filter((model) => model !== "custom");
-
-  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
-
-  return { selectedModels, pricing };
-}
-
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
   const providerConfig = await selectProvider();
 
-  // Get pricing map for gateway (needed even if using LM Studio, for the type)
-  let pricingMap: ReturnType<typeof buildPricingMap>;
+  let pricingMap: PricingMap;
   let selectedModels: string[];
-  let pricing: {
-    enabled: boolean;
-    lookups: Map<string, ReturnType<typeof lookupPricingFromMap>>;
-  };
+  let pricing: PricingResult;
 
   if (providerConfig.type === "gateway") {
-    const available_models = await gateway.getAvailableModels();
-    pricingMap = buildPricingMap(available_models.models);
+    const gatewayData = await getGatewayModelsAndPricing();
+    pricingMap = gatewayData.pricingMap;
     const result = await selectModelsFromGateway(pricingMap);
     selectedModels = result.selectedModels;
     pricing = result.pricing;
@@ -242,10 +97,9 @@ async function selectOptions() {
     selectedModels = await selectModelsFromLMStudio(
       providerConfig.lmstudio!.baseURL,
     );
-    // LM Studio models are free (local), so no pricing
     pricing = {
       enabled: false,
-      lookups: new Map<string, ReturnType<typeof lookupPricingFromMap>>(),
+      lookups: new Map<string, PricingLookup>(),
     };
   }
 
@@ -666,7 +520,6 @@ async function main() {
       }
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
 
-      // Simulate cache savings
       cacheSimulation = simulateCacheSavings(
         testResults,
         pricingLookup.pricing,
