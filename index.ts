@@ -26,7 +26,10 @@ import {
   formatCost,
   formatMTokCost,
 } from "./lib/pricing.ts";
-import { createLMStudioProvider } from "./lib/providers/lmstudio.ts";
+import {
+  createLMStudioProvider,
+  fetchLMStudioModels,
+} from "./lib/providers/lmstudio.ts";
 import type { LanguageModel } from "ai";
 import {
   intro,
@@ -37,13 +40,15 @@ import {
   select,
   confirm,
   note,
+  spinner,
 } from "@clack/prompts";
 import { gateway } from "ai";
 
-interface LMStudioConfig {
-  enabled: boolean;
-  baseURL: string;
-  modelId: string;
+type ProviderType = "gateway" | "lmstudio";
+
+interface ProviderConfig {
+  type: ProviderType;
+  lmstudioBaseURL?: string;
 }
 
 async function validateAndConfirmPricing(
@@ -137,19 +142,70 @@ async function validateAndConfirmPricing(
   }
 }
 
-async function selectOptions() {
-  intro("🚀 Svelte AI Bench");
+async function selectProvider(): Promise<ProviderConfig> {
+  const provider = await select({
+    message: "Select model provider",
+    options: [
+      {
+        value: "gateway",
+        label: "Vercel AI Gateway",
+        hint: "Cloud-hosted models via Vercel",
+      },
+      {
+        value: "lmstudio",
+        label: "LM Studio",
+        hint: "Local models via LM Studio",
+      },
+    ],
+    initialValue: "gateway",
+  });
 
+  if (isCancel(provider)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  if (provider === "lmstudio") {
+    const customUrl = await confirm({
+      message: "Use custom LM Studio URL? (default: http://localhost:1234/v1)",
+      initialValue: false,
+    });
+
+    if (isCancel(customUrl)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
+
+    let baseURL = "http://localhost:1234/v1";
+
+    if (customUrl) {
+      const urlInput = await text({
+        message: "Enter LM Studio server URL",
+        placeholder: "http://localhost:1234/v1",
+      });
+
+      if (isCancel(urlInput)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      baseURL = urlInput || "http://localhost:1234/v1";
+    }
+
+    return { type: "lmstudio", lmstudioBaseURL: baseURL };
+  }
+
+  return { type: "gateway" };
+}
+
+async function selectModelsFromGateway(
+  pricingMap: ReturnType<typeof buildPricingMap>,
+) {
   const available_models = await gateway.getAvailableModels();
-
-  const pricingMap = buildPricingMap(available_models.models);
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
-    options: [
-      { value: "custom", label: "Custom" },
-      { value: "lmstudio", label: "LM Studio (Local)" },
-    ].concat(
+    options: [{ value: "custom", label: "Custom" }].concat(
       available_models.models.reduce<Array<{ value: string; label: string }>>(
         (arr, model) => {
           if (model.modelType === "language") {
@@ -167,65 +223,6 @@ async function selectOptions() {
     process.exit(0);
   }
 
-  // Handle LM Studio selection
-  let lmstudioConfig: LMStudioConfig = {
-    enabled: false,
-    baseURL: "http://localhost:1234/v1",
-    modelId: "",
-  };
-
-  if (models.includes("lmstudio")) {
-    note(
-      "LM Studio uses a local OpenAI-compatible server.\nMake sure you have LM Studio running with a model loaded.\nDefault port is 1234.",
-      "🖥️  LM Studio Configuration",
-    );
-
-    const customUrl = await confirm({
-      message: "Use custom LM Studio URL? (default: http://localhost:1234/v1)",
-      initialValue: false,
-    });
-
-    if (isCancel(customUrl)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    if (customUrl) {
-      const baseURL = await text({
-        message: "Enter LM Studio server URL",
-        placeholder: "http://localhost:1234/v1",
-      });
-
-      if (isCancel(baseURL)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      lmstudioConfig.baseURL = baseURL || "http://localhost:1234/v1";
-    }
-
-    const modelId = await text({
-      message: "Enter the model ID loaded in LM Studio",
-      placeholder: "e.g., llama-3.2-1b, qwen2.5-7b-instruct",
-    });
-
-    if (isCancel(modelId)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    if (!modelId) {
-      cancel("Model ID is required for LM Studio.");
-      process.exit(0);
-    }
-
-    lmstudioConfig = {
-      enabled: true,
-      baseURL: lmstudioConfig.baseURL,
-      modelId,
-    };
-  }
-
   if (models.includes("custom")) {
     const custom_model = await text({
       message: "Enter custom model id",
@@ -237,16 +234,96 @@ async function selectOptions() {
     models.push(custom_model);
   }
 
-  const selectedModels = models.filter(
-    (model) => model !== "custom" && model !== "lmstudio",
-  );
-
-  // Add LM Studio as a model identifier if enabled
-  if (lmstudioConfig.enabled) {
-    selectedModels.push(`lmstudio/${lmstudioConfig.modelId}`);
-  }
+  const selectedModels = models.filter((model) => model !== "custom");
 
   const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
+
+  return { selectedModels, pricing };
+}
+
+async function selectModelsFromLMStudio(baseURL: string) {
+  const s = spinner();
+  s.start("Connecting to LM Studio...");
+
+  const lmstudioModels = await fetchLMStudioModels(baseURL);
+
+  if (lmstudioModels === null) {
+    s.stop("Failed to connect to LM Studio");
+    note(
+      `Could not connect to LM Studio at ${baseURL}\n\nMake sure:\n1. LM Studio is running\n2. A model is loaded\n3. The local server is started (Local Server tab → Start Server)`,
+      "❌ Connection Failed",
+    );
+    cancel("Cannot proceed without LM Studio connection.");
+    process.exit(1);
+  }
+
+  if (lmstudioModels.length === 0) {
+    s.stop("No models found");
+    note(
+      `LM Studio is running but no models are loaded.\n\nPlease load a model in LM Studio and try again.`,
+      "⚠️  No Models Available",
+    );
+    cancel("Cannot proceed without loaded models.");
+    process.exit(1);
+  }
+
+  s.stop(`Found ${lmstudioModels.length} model(s)`);
+
+  const models = await multiselect({
+    message: "Select model(s) to benchmark",
+    options: lmstudioModels.map((model) => ({
+      value: model.id,
+      label: model.id,
+      hint: model.owned_by !== "unknown" ? `by ${model.owned_by}` : undefined,
+    })),
+  });
+
+  if (isCancel(models)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  // LM Studio models are free (local), so no pricing
+  const pricing = {
+    enabled: false,
+    lookups: new Map<string, ReturnType<typeof lookupPricingFromMap>>(),
+  };
+
+  // Prefix with lmstudio/ for identification
+  const selectedModels = models.map((m) => `lmstudio/${m}`);
+
+  return { selectedModels, pricing };
+}
+
+async function selectOptions() {
+  intro("🚀 Svelte AI Bench");
+
+  // Step 1: Select provider
+  const providerConfig = await selectProvider();
+
+  // Get pricing map for gateway (needed even if using LM Studio, for the type)
+  let pricingMap: ReturnType<typeof buildPricingMap>;
+  let selectedModels: string[];
+  let pricing: {
+    enabled: boolean;
+    lookups: Map<string, ReturnType<typeof lookupPricingFromMap>>;
+  };
+
+  // Step 2: Select models based on provider
+  if (providerConfig.type === "gateway") {
+    const available_models = await gateway.getAvailableModels();
+    pricingMap = buildPricingMap(available_models.models);
+    const result = await selectModelsFromGateway(pricingMap);
+    selectedModels = result.selectedModels;
+    pricing = result.pricing;
+  } else {
+    pricingMap = buildPricingMap([]);
+    const result = await selectModelsFromLMStudio(
+      providerConfig.lmstudioBaseURL!,
+    );
+    selectedModels = result.selectedModels;
+    pricing = result.pricing;
+  }
 
   const mcp_integration = await select({
     message: "Which MCP integration to use?",
@@ -309,7 +386,7 @@ async function selectOptions() {
     mcp,
     testingTool,
     pricing,
-    lmstudioConfig,
+    providerConfig,
   };
 }
 
@@ -325,11 +402,11 @@ function parseCommandString(commandString: string): {
 
 function getModelForId(
   modelId: string,
-  lmstudioConfig: LMStudioConfig,
+  providerConfig: ProviderConfig,
 ): LanguageModel {
   if (modelId.startsWith("lmstudio/")) {
     const lmstudioModelId = modelId.replace("lmstudio/", "");
-    const provider = createLMStudioProvider(lmstudioConfig.baseURL);
+    const provider = createLMStudioProvider(providerConfig.lmstudioBaseURL);
     return provider(lmstudioModelId);
   }
 
@@ -465,7 +542,7 @@ async function runSingleTest(
 }
 
 async function main() {
-  const { models, mcp, testingTool, pricing, lmstudioConfig } =
+  const { models, mcp, testingTool, pricing, providerConfig } =
     await selectOptions();
 
   const mcpServerUrl = mcp;
@@ -479,6 +556,13 @@ async function main() {
   console.log("\n╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
+
+  console.log(
+    `\n🔌 Provider: ${providerConfig.type === "gateway" ? "Vercel AI Gateway" : "LM Studio"}`,
+  );
+  if (providerConfig.type === "lmstudio" && providerConfig.lmstudioBaseURL) {
+    console.log(`   URL: ${providerConfig.lmstudioBaseURL}`);
+  }
 
   console.log("\n📋 Models:");
   for (const modelId of models) {
@@ -500,7 +584,7 @@ async function main() {
     } else {
       console.log(`   ${modelId}`);
       if (modelId.startsWith("lmstudio/")) {
-        console.log(`      🖥️  Local model via LM Studio`);
+        console.log(`      🖥️  Local model (free)`);
       }
     }
   }
@@ -520,10 +604,6 @@ async function main() {
   console.log(
     `🧪 TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
   );
-
-  if (lmstudioConfig.enabled) {
-    console.log(`🖥️  LM Studio: ${lmstudioConfig.baseURL}`);
-  }
 
   console.log("\n📁 Discovering tests...");
   const tests = discoverTests();
@@ -584,7 +664,7 @@ async function main() {
       );
     }
 
-    const model = getModelForId(modelId, lmstudioConfig);
+    const model = getModelForId(modelId, providerConfig);
 
     const testResults = [];
     const startTime = Date.now();
@@ -718,16 +798,17 @@ async function main() {
         mcpTransportType: mcpEnabled ? mcpTransportType : null,
         timestamp: new Date().toISOString(),
         model: modelId,
+        provider: providerConfig.type,
         pricingKey: pricingLookup?.matchedKey ?? null,
         pricing: pricingInfo,
         totalCost,
         cacheSimulation,
-        lmstudio: modelId.startsWith("lmstudio/")
-          ? {
-              baseURL: lmstudioConfig.baseURL,
-              modelId: lmstudioConfig.modelId,
-            }
-          : null,
+        lmstudio:
+          providerConfig.type === "lmstudio"
+            ? {
+                baseURL: providerConfig.lmstudioBaseURL,
+              }
+            : null,
       },
     };
 

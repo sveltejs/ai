@@ -1,1 +1,6 @@
-export { createLMStudioProvider, lmstudio } from "./lmstudio.ts";
+export {
+  createLMStudioProvider,
+  lmstudio,
+  fetchLMStudioModels,
+  type LMStudioModel,
+} from "./lmstudio.ts";
