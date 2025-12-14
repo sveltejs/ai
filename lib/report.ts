@@ -82,16 +82,22 @@ export interface TotalCostInfo {
   cachedInputTokens: number;
 }
 
+interface LMStudioMetadata {
+  baseURL: string;
+}
+
 interface Metadata {
   mcpEnabled: boolean;
   mcpServerUrl: string | null;
   mcpTransportType?: string | null;
   timestamp: string;
   model: string;
+  provider?: "gateway" | "lmstudio";
   pricingKey?: string | null;
   pricing?: PricingInfo | null;
   totalCost?: TotalCostInfo | null;
   cacheSimulation?: ReturnType<typeof simulateCacheSavings> | null;
+  lmstudio?: LMStudioMetadata | null;
 }
 
 export interface SingleTestResult {
