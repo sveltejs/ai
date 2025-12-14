@@ -287,7 +287,9 @@ function renderPricingSection(data: MultiTestResultData) {
 
     const cacheSimRow =
       data.metadata.cacheSimulation &&
-      pricing?.cacheReadCostPerMTok !== undefined
+      pricing?.cacheReadCostPerMTok !== undefined &&
+      (data.metadata.cacheSimulation.cacheHits > 0 ||
+        data.metadata.cacheSimulation.cacheWriteTokens > 0)
         ? `
         <div class="cost-row simulated">
           <span class="cost-label">Estimated cost with prompt cache:</span>
