@@ -68,6 +68,9 @@ MCP integration is configured via the interactive CLI at runtime. Options:
 │   ├── report.ts               # Report generation orchestration
 │   ├── report-template.ts      # HTML report template generation
 │   ├── report-styles.ts        # CSS styles for HTML reports
+│   ├── token-cache.ts          # Token cache simulation for cost estimation
+│   ├── utils.ts                # Utility functions (sanitization, cost calculation, etc.)
+│   ├── utils.test.ts           # Unit tests for utility functions
 │   └── tools/
 │       ├── index.ts            # Tool exports
 │       ├── result-write.ts     # ResultWrite tool for final output
@@ -149,8 +152,75 @@ Key functions:
 
 - `extractPricingFromGatewayModel()`: Parse gateway model pricing
 - `buildPricingMap()`: Build lookup map from gateway models
+- `lookupPricingFromMap()`: Find pricing for a specific model
 - `calculateCost()`: Calculate total cost from token usage
 - `formatCost()` / `formatMTokCost()`: Format costs for display
+- `getModelPricingDisplay()`: Convert per-token costs to per-MTok for display
+
+### Token Cache Simulation
+
+The `lib/token-cache.ts` module simulates prompt caching behavior:
+
+**TokenCache Class:**
+
+- Models growing prefix cache across multiple API calls
+- Tracks cache hits, cache writes, and output tokens
+- Calculates simulated costs using cache read/write rates
+- Default rates: 10% for reads, 125% for writes (if not specified in pricing)
+
+**Cache Behavior Model:**
+
+1. Each test runs in its own context (cache resets between tests)
+2. Step 1's input is written to cache (pays cache creation rate)
+3. Each subsequent step:
+   - Previous step's full input is cached (pays cache read rate)
+   - New tokens extend the cache (pays cache creation rate)
+4. The cache prefix grows with each step
+
+**simulateCacheSavings()** (in `lib/utils.ts`):
+
+- Estimates cost savings with prompt caching enabled
+- Returns `simulatedCostWithCache`, `cacheHits`, and `cacheWriteTokens`
+- Results displayed in HTML report as "Cache Simulation" section
+- Shows potential savings compared to actual cost without caching
+
+### Utility Functions
+
+The `lib/utils.ts` module provides core utilities:
+
+- `sanitizeModelName()`: Convert model IDs to filesystem-safe names
+- `getTimestampedFilename()`: Generate timestamped filenames with optional model suffix
+- `isHttpUrl()`: Check if string is HTTP/HTTPS URL
+- `extractResultWriteContent()`: Extract component code from agent steps
+- `calculateTotalCost()`: Aggregate token usage and costs across all tests
+- `buildAgentPrompt()`: Build user message array from test definition
+- `simulateCacheSavings()`: Simulate cache savings using growing prefix model
+
+### Reference Verification
+
+The `lib/verify-references.ts` module verifies reference implementations:
+
+**Key Functions:**
+
+- `loadTestDefinitions()`: Discover test suites in `tests/` directory
+- `copyReferenceToComponent()`: Copy Reference.svelte to Component.svelte temporarily
+- `cleanupComponent()`: Remove temporary Component.svelte file
+- `runTest()`: Execute tests and collect detailed results
+- `printSummary()`: Display verification results summary
+- `verifyAllReferences()`: Main function that orchestrates entire verification workflow
+
+**Workflow:**
+
+1. Discover all test suites with Reference.svelte
+2. For each test:
+   - Copy Reference.svelte → Component.svelte
+   - Run vitest against the test
+   - Collect pass/fail results
+   - Cleanup Component.svelte
+3. Print summary of all results
+4. Return exit code (0 for success, 1 for failures)
+
+Used by `verify-references.ts` script accessible via `bun run verify-tests`.
 
 ### Key Technologies
 
@@ -185,9 +255,10 @@ The project uses `@ai-sdk/mcp` with a custom patch applied via `patch-package`:
    f. Test results are collected (pass/fail, error details)
    g. Output directory is cleaned up
 5. Results aggregated with pricing calculations
-6. Results written to `results/result-YYYY-MM-DD-HH-MM-SS.json`
-7. HTML report generated at `results/result-YYYY-MM-DD-HH-MM-SS.html`
-8. Report automatically opens in default browser
+6. Cache simulation estimates potential savings
+7. Results written to `results/result-YYYY-MM-DD-HH-MM-SS.json`
+8. HTML report generated at `results/result-YYYY-MM-DD-HH-MM-SS.html`
+9. Report automatically opens in default browser
 
 ### Output Files
 
@@ -227,7 +298,8 @@ All results are saved in the `results/` directory with timestamped filenames:
     "pricing": {
       "inputCostPerMTok": 3,
       "outputCostPerMTok": 15,
-      "cacheReadCostPerMTok": 0.3
+      "cacheReadCostPerMTok": 0.3,
+      "cacheCreationCostPerMTok": 3.75
     },
     "totalCost": {
       "inputCost": 0.003,
@@ -237,6 +309,11 @@ All results are saved in the `results/` directory with timestamped filenames:
       "inputTokens": 1000,
       "outputTokens": 1000,
       "cachedInputTokens": 1000
+    },
+    "cacheSimulation": {
+      "simulatedCostWithCache": 0.015,
+      "cacheHits": 2000,
+      "cacheWriteTokens": 1500
     }
   }
 }
@@ -251,8 +328,9 @@ Unit tests for library modules are in `lib/*.test.ts`:
 - `lib/output-test-runner.test.ts` - Output directory management
 - `lib/tools/result-write.test.ts` - ResultWrite tool behavior
 - `lib/tools/test-component.test.ts` - TestComponent tool behavior
+- `lib/utils.test.ts` - Utility functions, cost calculation, cache simulation
 
-Run unit tests with: `bun run test:self`
+Run unit tests with: `bun test`
 
 ## TypeScript Configuration
 
@@ -277,6 +355,7 @@ Run unit tests with: `bun run test:self`
 - All result files are saved with timestamps to preserve historical benchmarks
 - MCP integration can be configured via interactive CLI without code changes
 - MCP status is clearly indicated in both the JSON metadata and HTML report with a visual badge
+- Cache simulation shows estimated savings if prompt caching were enabled
 - Exit code is 0 if all tests pass, 1 if any tests fail
 - Pricing is fetched from Vercel AI Gateway model metadata at runtime
 
