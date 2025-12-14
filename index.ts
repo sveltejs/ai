@@ -19,158 +19,89 @@ import {
   runTestVerification,
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
+import { getModelPricingDisplay, formatCost, formatMTokCost } from "./lib/pricing.ts";
 import {
-  buildPricingMap,
-  lookupPricingFromMap,
-  getModelPricingDisplay,
-  formatCost,
-  formatMTokCost,
-} from "./lib/pricing.ts";
+  gateway,
+  getGatewayModelsAndPricing,
+  selectModelsFromGateway,
+  type PricingMap,
+  type PricingLookup,
+  type PricingResult,
+} from "./lib/providers/ai-gateway.ts";
+import {
+  configureLMStudio,
+  selectModelsFromLMStudio,
+  getLMStudioModel,
+  isLMStudioModel,
+  type LMStudioConfig,
+} from "./lib/providers/lmstudio.ts";
 import type { LanguageModel } from "ai";
-import {
-  intro,
-  multiselect,
-  isCancel,
-  cancel,
-  text,
-  select,
-  confirm,
-  note,
-} from "@clack/prompts";
-import { gateway } from "ai";
+import { intro, isCancel, cancel, select, confirm, text } from "@clack/prompts";
+import { buildPricingMap } from "./lib/pricing.ts";
 
-async function validateAndConfirmPricing(
-  models: string[],
-  pricingMap: ReturnType<typeof buildPricingMap>,
-) {
-  const lookups = new Map<string, ReturnType<typeof lookupPricingFromMap>>();
+type ProviderType = "gateway" | "lmstudio";
 
-  for (const modelId of models) {
-    const lookup = lookupPricingFromMap(modelId, pricingMap);
-    lookups.set(modelId, lookup);
+interface ProviderConfig {
+  type: ProviderType;
+  lmstudio?: LMStudioConfig;
+}
+
+async function selectProvider(): Promise<ProviderConfig> {
+  const provider = await select({
+    message: "Select model provider",
+    options: [
+      {
+        value: "gateway",
+        label: "Vercel AI Gateway",
+        hint: "Cloud-hosted models via Vercel",
+      },
+      {
+        value: "lmstudio",
+        label: "LM Studio",
+        hint: "Local models via LM Studio",
+      },
+    ],
+    initialValue: "gateway",
+  });
+
+  if (isCancel(provider)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
   }
 
-  const modelsWithPricing = models.filter((m) => lookups.get(m) !== null);
-  const modelsWithoutPricing = models.filter((m) => lookups.get(m) === null);
-
-  if (modelsWithoutPricing.length === 0) {
-    const pricingLines = models.map((modelId) => {
-      const lookup = lookups.get(modelId)!;
-      const display = getModelPricingDisplay(lookup.pricing);
-      const cacheReadText =
-        display.cacheReadCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-          : "";
-      const cacheWriteText =
-        display.cacheCreationCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-          : "";
-      return `${modelId}\n  → ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText}`;
-    });
-
-    note(pricingLines.join("\n\n"), "💰 Pricing Found");
-
-    const usePricing = await confirm({
-      message: "Enable cost calculation?",
-      initialValue: true,
-    });
-
-    if (isCancel(usePricing)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    return { enabled: usePricing, lookups };
-  } else {
-    const lines: string[] = [];
-
-    if (modelsWithoutPricing.length > 0) {
-      lines.push("No pricing found for:");
-      for (const modelId of modelsWithoutPricing) {
-        lines.push(`  ✗ ${modelId}`);
-      }
-    }
-
-    if (modelsWithPricing.length > 0) {
-      lines.push("");
-      lines.push("Pricing available for:");
-      for (const modelId of modelsWithPricing) {
-        const lookup = lookups.get(modelId)!;
-        const display = getModelPricingDisplay(lookup.pricing);
-        const cacheReadText =
-          display.cacheReadCostPerMTok !== undefined
-            ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-            : "";
-        const cacheWriteText =
-          display.cacheCreationCostPerMTok !== undefined
-            ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-            : "";
-        lines.push(
-          `  ✓ ${modelId} (${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText})`,
-        );
-      }
-    }
-
-    lines.push("");
-    lines.push("Cost calculation will be disabled.");
-
-    note(lines.join("\n"), "⚠️  Pricing Incomplete");
-
-    const proceed = await confirm({
-      message: "Continue without pricing?",
-      initialValue: true,
-    });
-
-    if (isCancel(proceed) || !proceed) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    return { enabled: false, lookups };
+  if (provider === "lmstudio") {
+    const lmstudioConfig = await configureLMStudio();
+    return { type: "lmstudio", lmstudio: lmstudioConfig };
   }
+
+  return { type: "gateway" };
 }
 
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  const available_models = await gateway.getAvailableModels();
+  const providerConfig = await selectProvider();
 
-  const pricingMap = buildPricingMap(available_models.models);
+  let pricingMap: PricingMap;
+  let selectedModels: string[];
+  let pricing: PricingResult;
 
-  const models = await multiselect({
-    message: "Select model(s) to benchmark",
-    options: [{ value: "custom", label: "Custom" }].concat(
-      available_models.models.reduce<Array<{ value: string; label: string }>>(
-        (arr, model) => {
-          if (model.modelType === "language") {
-            arr.push({ value: model.id, label: model.name });
-          }
-          return arr;
-        },
-        [],
-      ),
-    ),
-  });
-
-  if (isCancel(models)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
+  if (providerConfig.type === "gateway") {
+    const gatewayData = await getGatewayModelsAndPricing();
+    pricingMap = gatewayData.pricingMap;
+    const result = await selectModelsFromGateway(pricingMap);
+    selectedModels = result.selectedModels;
+    pricing = result.pricing;
+  } else {
+    pricingMap = buildPricingMap([]);
+    selectedModels = await selectModelsFromLMStudio(
+      providerConfig.lmstudio!.baseURL,
+    );
+    pricing = {
+      enabled: false,
+      lookups: new Map<string, PricingLookup>(),
+    };
   }
-
-  if (models.includes("custom")) {
-    const custom_model = await text({
-      message: "Enter custom model id",
-    });
-    if (isCancel(custom_model)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-    models.push(custom_model);
-  }
-
-  const selectedModels = models.filter((model) => model !== "custom");
-
-  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
 
   const mcp_integration = await select({
     message: "Which MCP integration to use?",
@@ -233,6 +164,7 @@ async function selectOptions() {
     mcp,
     testingTool,
     pricing,
+    providerConfig,
   };
 }
 
@@ -244,6 +176,17 @@ function parseCommandString(commandString: string): {
   const command = parts[0] ?? "";
   const args = parts.slice(1);
   return { command, args };
+}
+
+function getModelForId(
+  modelId: string,
+  providerConfig: ProviderConfig,
+): LanguageModel {
+  if (isLMStudioModel(modelId)) {
+    return getLMStudioModel(modelId, providerConfig.lmstudio?.baseURL);
+  }
+
+  return gateway.languageModel(modelId);
 }
 
 async function runSingleTest(
@@ -375,7 +318,8 @@ async function runSingleTest(
 }
 
 async function main() {
-  const { models, mcp, testingTool, pricing } = await selectOptions();
+  const { models, mcp, testingTool, pricing, providerConfig } =
+    await selectOptions();
 
   const mcpServerUrl = mcp;
   const mcpEnabled = !!mcp;
@@ -388,6 +332,13 @@ async function main() {
   console.log("\n╔════════════════════════════════════════════════════╗");
   console.log("║            SvelteBench 2.0 - Multi-Test            ║");
   console.log("╚════════════════════════════════════════════════════╝");
+
+  console.log(
+    `\n🔌 Provider: ${providerConfig.type === "gateway" ? "Vercel AI Gateway" : "LM Studio"}`,
+  );
+  if (providerConfig.type === "lmstudio" && providerConfig.lmstudio) {
+    console.log(`   URL: ${providerConfig.lmstudio.baseURL}`);
+  }
 
   console.log("\n📋 Models:");
   for (const modelId of models) {
@@ -408,6 +359,9 @@ async function main() {
       );
     } else {
       console.log(`   ${modelId}`);
+      if (isLMStudioModel(modelId)) {
+        console.log(`      🖥️  Local model (free)`);
+      }
     }
   }
 
@@ -486,7 +440,7 @@ async function main() {
       );
     }
 
-    const model = gateway.languageModel(modelId);
+    const model = getModelForId(modelId, providerConfig);
 
     const testResults = [];
     const startTime = Date.now();
@@ -566,7 +520,6 @@ async function main() {
       }
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
 
-      // Simulate cache savings
       cacheSimulation = simulateCacheSavings(
         testResults,
         pricingLookup.pricing,
@@ -620,10 +573,17 @@ async function main() {
         mcpTransportType: mcpEnabled ? mcpTransportType : null,
         timestamp: new Date().toISOString(),
         model: modelId,
+        provider: providerConfig.type,
         pricingKey: pricingLookup?.matchedKey ?? null,
         pricing: pricingInfo,
         totalCost,
         cacheSimulation,
+        lmstudio:
+          providerConfig.type === "lmstudio" && providerConfig.lmstudio
+            ? {
+                baseURL: providerConfig.lmstudio.baseURL,
+              }
+            : null,
       },
     };
 
