@@ -18,9 +18,9 @@ export interface PricingResult {
 }
 
 export async function getGatewayModelsAndPricing() {
-  const available_models = await gateway.getAvailableModels();
-  const pricingMap = buildPricingMap(available_models.models);
-  return { models: available_models.models, pricingMap };
+  const availableModels = await gateway.getAvailableModels();
+  const pricingMap = buildPricingMap(availableModels.models);
+  return { models: availableModels.models, pricingMap };
 }
 
 export async function validateAndConfirmPricing(
@@ -115,12 +115,12 @@ export async function validateAndConfirmPricing(
 }
 
 export async function selectModelsFromGateway(pricingMap: PricingMap) {
-  const available_models = await gateway.getAvailableModels();
+  const availableModels = await gateway.getAvailableModels();
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
     options: [{ value: "custom", label: "Custom" }].concat(
-      available_models.models.reduce<Array<{ value: string; label: string }>>(
+      availableModels.models.reduce<Array<{ value: string; label: string }>>(
         (arr, model) => {
           if (model.modelType === "language") {
             arr.push({ value: model.id, label: model.name });
@@ -138,14 +138,14 @@ export async function selectModelsFromGateway(pricingMap: PricingMap) {
   }
 
   if (models.includes("custom")) {
-    const custom_model = await text({
+    const customModel = await text({
       message: "Enter custom model id",
     });
-    if (isCancel(custom_model)) {
+    if (isCancel(customModel)) {
       cancel("Operation cancelled.");
       process.exit(0);
     }
-    models.push(custom_model);
+    models.push(customModel);
   }
 
   const selectedModels = models.filter((model) => model !== "custom");
