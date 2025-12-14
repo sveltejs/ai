@@ -10,16 +10,6 @@ import {
 } from "@clack/prompts";
 import type { LanguageModel } from "ai";
 
-/**
- * Creates an LM Studio provider instance.
- *
- * LM Studio is a user interface for running local models.
- * It contains an OpenAI compatible API server that you can use with the AI SDK.
- * You can start the local server under the Local Server tab in the LM Studio UI.
- *
- * @param baseURL - The base URL of the LM Studio server (default: http://localhost:1234/v1)
- * @returns An LM Studio provider instance
- */
 export function createLMStudioProvider(
   baseURL: string = "http://localhost:1234/v1",
 ) {
@@ -29,14 +19,8 @@ export function createLMStudioProvider(
   });
 }
 
-/**
- * Default LM Studio provider instance using the default port (1234).
- */
 export const lmstudio = createLMStudioProvider();
 
-/**
- * Model information returned from LM Studio's /v1/models endpoint
- */
 export interface LMStudioModel {
   id: string;
   object: string;
@@ -48,19 +32,10 @@ interface LMStudioModelsResponse {
   data: LMStudioModel[];
 }
 
-/**
- * LM Studio configuration
- */
 export interface LMStudioConfig {
   baseURL: string;
 }
 
-/**
- * Fetches available models from an LM Studio server.
- *
- * @param baseURL - The base URL of the LM Studio server (default: http://localhost:1234/v1)
- * @returns Array of available model IDs, or null if the server is not reachable
- */
 export async function fetchLMStudioModels(
   baseURL: string = "http://localhost:1234/v1",
 ): Promise<LMStudioModel[] | null> {
@@ -81,17 +56,11 @@ export async function fetchLMStudioModels(
 
     const data = (await response.json()) as LMStudioModelsResponse;
     return data.data || [];
-  } catch (error) {
-    // Server not running or not reachable
+  } catch {
     return null;
   }
 }
 
-/**
- * Prompts the user to configure LM Studio connection settings.
- *
- * @returns LM Studio configuration with base URL
- */
 export async function configureLMStudio(): Promise<LMStudioConfig> {
   const customUrl = await confirm({
     message: "Use custom LM Studio URL? (default: http://localhost:1234/v1)",
@@ -122,12 +91,6 @@ export async function configureLMStudio(): Promise<LMStudioConfig> {
   return { baseURL };
 }
 
-/**
- * Connects to LM Studio and prompts the user to select models.
- *
- * @param baseURL - The base URL of the LM Studio server
- * @returns Array of selected model IDs (prefixed with "lmstudio/")
- */
 export async function selectModelsFromLMStudio(
   baseURL: string,
 ): Promise<string[]> {
@@ -172,17 +135,9 @@ export async function selectModelsFromLMStudio(
     process.exit(0);
   }
 
-  // Prefix with lmstudio/ for identification
   return models.map((m) => `lmstudio/${m}`);
 }
 
-/**
- * Gets a language model instance for an LM Studio model ID.
- *
- * @param modelId - The model ID (with or without "lmstudio/" prefix)
- * @param baseURL - The base URL of the LM Studio server
- * @returns A LanguageModel instance
- */
 export function getLMStudioModel(
   modelId: string,
   baseURL?: string,
@@ -194,12 +149,6 @@ export function getLMStudioModel(
   return provider(actualModelId);
 }
 
-/**
- * Checks if a model ID is an LM Studio model.
- *
- * @param modelId - The model ID to check
- * @returns True if the model ID starts with "lmstudio/"
- */
 export function isLMStudioModel(modelId: string): boolean {
   return modelId.startsWith("lmstudio/");
 }
