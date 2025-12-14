@@ -221,7 +221,6 @@ async function selectModelsFromGateway(
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  // Step 1: Select provider
   const providerConfig = await selectProvider();
 
   // Get pricing map for gateway (needed even if using LM Studio, for the type)
@@ -232,7 +231,6 @@ async function selectOptions() {
     lookups: Map<string, ReturnType<typeof lookupPricingFromMap>>;
   };
 
-  // Step 2: Select models based on provider
   if (providerConfig.type === "gateway") {
     const available_models = await gateway.getAvailableModels();
     pricingMap = buildPricingMap(available_models.models);
