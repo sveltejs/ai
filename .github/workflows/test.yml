@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Run ESLint
+        run: bun run lint
+
       - name: TypeScript type check
         run: bun run tsc
 

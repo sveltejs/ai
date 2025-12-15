@@ -124,15 +124,15 @@ async function validateAndConfirmPricing(
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  const available_models = await gateway.getAvailableModels();
+  const availableModels = await gateway.getAvailableModels();
 
-  const gatewayModels = available_models.models as GatewayModel[];
+  const gatewayModels = availableModels.models as GatewayModel[];
   const pricingMap = buildPricingMap(gatewayModels);
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
     options: [{ value: "custom", label: "Custom" }].concat(
-      available_models.models.reduce<Array<{ value: string; label: string }>>(
+      availableModels.models.reduce<Array<{ value: string; label: string }>>(
         (arr, model) => {
           if (model.modelType === "language") {
             arr.push({ value: model.id, label: model.name });
@@ -150,21 +150,21 @@ async function selectOptions() {
   }
 
   if (models.includes("custom")) {
-    const custom_model = await text({
+    const customModel = await text({
       message: "Enter custom model id",
     });
-    if (isCancel(custom_model)) {
+    if (isCancel(customModel)) {
       cancel("Operation cancelled.");
       process.exit(0);
     }
-    models.push(custom_model);
+    models.push(customModel);
   }
 
   const selectedModels = models.filter((model) => model !== "custom");
 
   const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
 
-  const mcp_integration = await select({
+  const mcpIntegration = await select({
     message: "Which MCP integration to use?",
     options: [
       { value: "none", label: "No MCP Integration" },
@@ -173,14 +173,14 @@ async function selectOptions() {
     ],
   });
 
-  if (isCancel(mcp_integration)) {
+  if (isCancel(mcpIntegration)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
 
   let mcp: string | undefined = undefined;
 
-  if (mcp_integration !== "none") {
+  if (mcpIntegration !== "none") {
     const custom = await confirm({
       message: "Do you want to provide a custom MCP server/command?",
       initialValue: false,
@@ -192,18 +192,18 @@ async function selectOptions() {
     }
 
     if (custom) {
-      const custom_mcp = await text({
+      const customMcp = await text({
         message: "Insert custom url or command",
       });
-      if (isCancel(custom_mcp)) {
+      if (isCancel(customMcp)) {
         cancel("Operation cancelled.");
         process.exit(0);
       }
 
-      mcp = custom_mcp;
+      mcp = customMcp;
     } else {
       mcp =
-        mcp_integration === "http"
+        mcpIntegration === "http"
           ? "https://mcp.svelte.dev/mcp"
           : "npx -y @sveltejs/mcp";
     }
