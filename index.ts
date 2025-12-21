@@ -248,7 +248,7 @@ async function runSingleTest(
   console.log(`\n[${testIndex + 1}/${totalTests}] Running test: ${test.name}`);
   console.log("─".repeat(50));
 
-  const prompt = buildAgentPrompt(test);
+  const fullPrompt = buildAgentPrompt(test);
 
   try {
     const tools = {
@@ -301,7 +301,7 @@ async function runSingleTest(
     if (testComponentEnabled) {
       console.log("  📋 TestComponent tool is available");
     }
-    const result = await agent.generate({ prompt });
+    const result = await agent.generate({ prompt: fullPrompt });
 
     const resultWriteContent = extractResultWriteContent(result.steps);
 
@@ -309,7 +309,7 @@ async function runSingleTest(
       console.log("  ⚠️  No ResultWrite output found");
       return {
         testName: test.name,
-        prompt: test.prompt,
+        prompt: fullPrompt,
         steps: result.steps as unknown as SingleTestResult["steps"],
         resultWriteContent: null,
         verification: null,
@@ -340,7 +340,7 @@ async function runSingleTest(
 
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: fullPrompt,
       steps: result.steps as unknown as SingleTestResult["steps"],
       resultWriteContent,
       verification,
@@ -349,7 +349,7 @@ async function runSingleTest(
     console.error(`✗ Error running test: ${error}`);
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: fullPrompt,
       steps: [],
       resultWriteContent: null,
       verification: {

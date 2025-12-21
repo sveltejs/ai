@@ -9,11 +9,12 @@ export interface TestDefinition {
   testFile: string;
   promptFile: string;
   prompt: string;
+  testContent: string;
 }
 
-export function discoverTests() {
+export function discoverTests(): TestDefinition[] {
   const testsDir = join(process.cwd(), "tests");
-  const definitions = [];
+  const definitions: TestDefinition[] = [];
 
   try {
     const entries = readdirSync(testsDir);
@@ -34,6 +35,7 @@ export function discoverTests() {
           existsSync(promptFile)
         ) {
           const prompt = readFileSync(promptFile, "utf-8");
+          const testContent = readFileSync(testFile, "utf-8");
 
           definitions.push({
             name: entry,
@@ -43,6 +45,7 @@ export function discoverTests() {
             testFile,
             promptFile,
             prompt,
+            testContent,
           });
         } else {
           const missing = [];
@@ -62,8 +65,16 @@ export function discoverTests() {
   return definitions;
 }
 
-export function buildAgentPrompt(test: TestDefinition) {
+export function buildAgentPrompt(test: TestDefinition): string {
   return `${test.prompt}
+
+## Test Suite
+
+Your component must pass the following tests:
+
+\`\`\`ts
+${test.testContent}
+\`\`\`
 
 IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`;
 }
