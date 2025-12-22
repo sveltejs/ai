@@ -1,4 +1,5 @@
 import type { TestVerificationResult } from "./output-test-runner.ts";
+import type { ValidationResult } from "./validator-runner.ts";
 import type { MultiTestResultData, SingleTestResult } from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
@@ -98,6 +99,32 @@ function renderContentBlock(block: ContentBlock) {
   return "";
 }
 
+function renderValidationResult(validation: ValidationResult | null | undefined) {
+  if (!validation) {
+    return "";
+  }
+
+  const statusClass = validation.valid ? "passed" : "failed";
+  const statusIcon = validation.valid ? "✓" : "✗";
+  const statusText = validation.valid ? "Validation passed" : "Validation failed";
+
+  let errorsHtml = "";
+  if (validation.errors && validation.errors.length > 0) {
+    const errorItems = validation.errors
+      .map((err) => `<li class="validation-error-item">${escapeHtml(err)}</li>`)
+      .join("");
+    errorsHtml = `<ul class="validation-errors">${errorItems}</ul>`;
+  }
+
+  return `<div class="validation-result ${statusClass}">
+    <div class="validation-header">
+      <span class="validation-icon">${statusIcon}</span>
+      <span class="validation-text">${statusText}</span>
+    </div>
+    ${errorsHtml}
+  </div>`;
+}
+
 function renderVerificationResult(
   verification: TestVerificationResult | null,
 ) {
@@ -107,6 +134,14 @@ function renderVerificationResult(
       <span class="verification-text">Test verification not run</span>
     </div>`;
   }
+
+  // Render validation result first if present
+  const validationHtml = verification.validation
+    ? `<div class="validation-section">
+        <h5>Code Validation</h5>
+        ${renderValidationResult(verification.validation)}
+      </div>`
+    : "";
 
   const statusClass = verification.passed ? "passed" : "failed";
   const statusIcon = verification.passed ? "✓" : "✗";
@@ -133,7 +168,8 @@ function renderVerificationResult(
     errorHtml = `<div class="verification-error">Error: ${escapeHtml(verification.error)}</div>`;
   }
 
-  return `<div class="verification-result ${statusClass}">
+  return `${validationHtml}
+  <div class="verification-result ${statusClass}">
     <div class="verification-header">
       <span class="verification-icon">${statusIcon}</span>
       <span class="verification-text">${statusText}</span>
@@ -428,6 +464,66 @@ function getPricingStyles() {
     .cost-row.total .cost-value {
       color: var(--success);
       font-size: 15px;
+    }
+
+    /* Validation styles */
+    .validation-section {
+      margin-bottom: 12px;
+    }
+
+    .validation-section h5 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .validation-result {
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .validation-result.passed {
+      background: var(--passed-bg);
+      border-color: var(--passed-border);
+    }
+
+    .validation-result.failed {
+      background: var(--failed-bg);
+      border-color: var(--failed-border);
+    }
+
+    .validation-result .validation-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .validation-result .validation-icon {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .validation-result.passed .validation-icon { color: var(--success); }
+    .validation-result.failed .validation-icon { color: var(--error); }
+
+    .validation-result .validation-text {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .validation-errors {
+      margin-top: 8px;
+      padding-left: 20px;
+      list-style: disc;
+    }
+
+    .validation-error-item {
+      color: var(--error);
+      font-size: 12px;
+      margin: 4px 0;
     }
   `;
 }

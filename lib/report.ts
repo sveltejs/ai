@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
+import type { ValidationResult } from "./validator-runner.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
 
 interface TextBlock {

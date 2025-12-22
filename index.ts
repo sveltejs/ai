@@ -321,17 +321,29 @@ async function runSingleTest(
     console.log("  ⏳ Verifying against tests...");
     const verification = await runTestVerification(test, resultWriteContent);
 
+    // Display validation results
+    if (verification.validation) {
+      if (verification.validation.valid) {
+        console.log("  ✓ Code validation passed");
+      } else {
+        console.log("  ✗ Code validation failed:");
+        for (const error of verification.validation.errors) {
+          console.log(`    - ${error}`);
+        }
+      }
+    }
+
     if (verification.passed) {
       console.log(
-        `✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
+        `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );
     } else {
       console.log(
-        `✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
+        `  ✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
-          console.log(`- ${ft.fullName}`);
+          console.log(`    - ${ft.fullName}`);
         }
       }
     }
@@ -346,7 +358,7 @@ async function runSingleTest(
       verification,
     };
   } catch (error) {
-    console.error(`✗ Error running test: ${error}`);
+    console.error(`  ✗ Error running test: ${error}`);
     return {
       testName: test.name,
       prompt: fullPrompt,
@@ -504,7 +516,15 @@ async function main() {
           ? "PASSED"
           : "FAILED"
         : "SKIPPED";
-      console.log(`${status} ${result.testName}: ${statusText}`);
+      
+      // Show validation status if present
+      const validationInfo = result.verification?.validation
+        ? result.verification.validation.valid
+          ? " (validated)"
+          : " (validation failed)"
+        : "";
+      
+      console.log(`${status} ${result.testName}: ${statusText}${validationInfo}`);
     }
 
     console.log("─".repeat(50));

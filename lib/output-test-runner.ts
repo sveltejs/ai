@@ -8,6 +8,7 @@ import {
 import { join } from "node:path";
 import { startVitest } from "vitest/node";
 import type { TestDefinition } from "./test-discovery.ts";
+import { runValidator, type ValidationResult } from "./validator-runner.ts";
 
 const OUTPUTS_DIR = join(process.cwd(), "outputs");
 
@@ -25,6 +26,7 @@ export interface TestVerificationResult {
   duration: number;
   error?: string;
   failedTests?: FailedTest[];
+  validation?: ValidationResult | null;
 }
 
 export function setupOutputsDirectory() {
@@ -70,8 +72,25 @@ export function cleanupTestEnvironment(testName: string) {
 export async function runTestVerification(
   test: TestDefinition,
   componentCode: string,
-) {
+): Promise<TestVerificationResult> {
   const startTime = Date.now();
+
+  // Run validation first (if validator exists)
+  const validation = await runValidator(test, componentCode);
+
+  if (validation && !validation.valid) {
+    // Validation failed - return early without running tests
+    return {
+      testName: test.name,
+      passed: false,
+      numTests: 0,
+      numPassed: 0,
+      numFailed: 0,
+      duration: Date.now() - startTime,
+      error: `Validation failed: ${validation.errors.join("; ")}`,
+      validation,
+    };
+  }
 
   try {
     const testDir = prepareTestEnvironment(test, componentCode);
@@ -91,6 +110,7 @@ export async function runTestVerification(
         numFailed: 0,
         duration: Date.now() - startTime,
         error: "Failed to start vitest",
+        validation,
       };
     }
 
@@ -121,6 +141,7 @@ export async function runTestVerification(
         duration: Date.now() - startTime,
         error:
           allErrors.length > 0 ? allErrors.join("\n") : "No test modules found",
+        validation,
       };
     }
 
@@ -204,6 +225,7 @@ export async function runTestVerification(
       duration: Date.now() - startTime,
       failedTests: failedTests.length > 0 ? failedTests : undefined,
       error: allErrors.length > 0 && !passed ? allErrors[0] : undefined,
+      validation,
     };
   } catch (error) {
     return {
@@ -214,6 +236,7 @@ export async function runTestVerification(
       numFailed: 0,
       duration: Date.now() - startTime,
       error: error instanceof Error ? error.message : String(error),
+      validation,
     };
   }
 }
