@@ -235,6 +235,11 @@ function renderTestSection(test: SingleTestResult, index: number) {
 
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
+  // Unit test info for the test header
+  const unitTestInfo = test.verification
+    ? `${test.verification.numPassed}/${test.verification.numTests} unit tests`
+    : "";
+
   const resultWriteHtml = test.resultWriteContent
     ? `<div class="output-section">
         <div class="token-summary">
@@ -258,7 +263,7 @@ function renderTestSection(test: SingleTestResult, index: number) {
     <summary class="test-header">
       <span class="test-status ${verificationStatus}">${verificationIcon}</span>
       <span class="test-name">${escapeHtml(test.testName)}</span>
-      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens</span>
+      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens${unitTestInfo ? ` · ${unitTestInfo}` : ""}</span>
     </summary>
     <div class="test-content">
       <details class="prompt-section">
@@ -525,6 +530,64 @@ function getPricingStyles() {
       font-size: 12px;
       margin: 4px 0;
     }
+
+    /* Summary bar enhancements */
+    .summary-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .summary-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 80px;
+    }
+
+    .summary-items {
+      display: flex;
+      gap: 16px;
+    }
+
+    .unit-tests-summary {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .unit-tests-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .unit-tests-stats {
+      display: flex;
+      gap: 12px;
+    }
+
+    .unit-test-stat {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .unit-test-stat.passed { color: var(--success); }
+    .unit-test-stat.failed { color: var(--error); }
+    .unit-test-stat.total { color: var(--text); }
   `;
 }
 
@@ -536,6 +599,13 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
     (t) => t.verification && !t.verification.passed,
   ).length;
   const skippedTests = data.tests.filter((t) => !t.verification).length;
+
+  // Calculate unit test totals from metadata or compute them
+  const unitTestTotals = metadata.unitTestTotals ?? {
+    total: data.tests.reduce((sum, t) => sum + (t.verification?.numTests ?? 0), 0),
+    passed: data.tests.reduce((sum, t) => sum + (t.verification?.numPassed ?? 0), 0),
+    failed: data.tests.reduce((sum, t) => sum + (t.verification?.numFailed ?? 0), 0),
+  };
 
   const totalTokens = data.tests.reduce(
     (sum, test) =>
@@ -610,6 +680,14 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
       <div class="summary-item passed">✓ ${passedTests} passed</div>
       <div class="summary-item failed">✗ ${failedTests} failed</div>
       ${skippedTests > 0 ? `<div class="summary-item skipped">⊘ ${skippedTests} skipped</div>` : ""}
+    </div>
+    <div class="unit-tests-summary">
+      <span class="unit-tests-label">Unit Tests:</span>
+      <div class="unit-tests-stats">
+        <span class="unit-test-stat passed">✓ ${unitTestTotals.passed} passed</span>
+        <span class="unit-test-stat failed">✗ ${unitTestTotals.failed} failed</span>
+        <span class="unit-test-stat total">${unitTestTotals.total} total</span>
+      </div>
     </div>
   </header>
 

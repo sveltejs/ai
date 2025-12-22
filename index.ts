@@ -4,6 +4,7 @@ import { Experimental_StdioMCPTransport as StdioMCPTransport } from "./node_modu
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import {
   generateReport,
+  calculateUnitTestTotals,
   type SingleTestResult,
 } from "./lib/report.ts";
 import {
@@ -564,7 +565,7 @@ async function main() {
 
     const model = gateway.languageModel(modelId);
 
-    const testResults = [];
+    const testResults: SingleTestResult[] = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -594,6 +595,9 @@ async function main() {
     totalFailed += failed;
     const skipped = testResults.filter((r) => !r.verification).length;
 
+    // Calculate unit test totals
+    const unitTestTotals = calculateUnitTestTotals(testResults);
+
     for (const result of testResults) {
       const status = result.verification
         ? result.verification.passed
@@ -613,13 +617,22 @@ async function main() {
           : " (validation failed)"
         : "";
       
-      console.log(`${status} ${result.testName}: ${statusText}${validationInfo}`);
+      // Show unit test counts
+      const unitTestInfo = result.verification
+        ? ` [${result.verification.numPassed}/${result.verification.numTests} unit tests]`
+        : "";
+      
+      console.log(`${status} ${result.testName}: ${statusText}${validationInfo}${unitTestInfo}`);
     }
 
     console.log("─".repeat(50));
     console.log(
-      `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
+      `Test Suites: ${passed} passed, ${failed} failed, ${skipped} skipped`,
     );
+    console.log(
+      `Unit Tests:  ${unitTestTotals.passed} passed, ${unitTestTotals.failed} failed, ${unitTestTotals.total} total`,
+    );
+    console.log(`Duration:    ${(totalDuration / 1000).toFixed(1)}s`);
 
     let totalCost = null;
     let pricingInfo = null;
@@ -670,6 +683,7 @@ async function main() {
         pricingKey: pricingLookup?.matchedKey ?? null,
         pricing: pricingInfo,
         totalCost,
+        unitTestTotals,
       },
     };
 

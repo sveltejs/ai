@@ -82,6 +82,12 @@ export interface TotalCostInfo {
   cachedInputTokens: number;
 }
 
+export interface UnitTestTotals {
+  total: number;
+  passed: number;
+  failed: number;
+}
+
 interface Metadata {
   mcpEnabled: boolean;
   mcpServerUrl: string | null;
@@ -91,6 +97,7 @@ interface Metadata {
   pricingKey?: string | null;
   pricing?: PricingInfo | null;
   totalCost?: TotalCostInfo | null;
+  unitTestTotals?: UnitTestTotals | null;
 }
 
 export interface SingleTestResult {
@@ -110,6 +117,22 @@ interface LegacyResultData {
   steps: Step[];
   resultWriteContent?: string | null;
   metadata?: Metadata;
+}
+
+export function calculateUnitTestTotals(tests: SingleTestResult[]): UnitTestTotals {
+  let total = 0;
+  let passed = 0;
+  let failed = 0;
+
+  for (const test of tests) {
+    if (test.verification) {
+      total += test.verification.numTests;
+      passed += test.verification.numPassed;
+      failed += test.verification.numFailed;
+    }
+  }
+
+  return { total, passed, failed };
 }
 
 export async function generateReport(
