@@ -141,7 +141,6 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
     </div>`;
   }
 
-  // Render validation result first if present
   const validationHtml = verification.validation
     ? `<div class="validation-section">
         <h5>Code Validation</h5>
@@ -241,7 +240,6 @@ function renderTestSection(test: SingleTestResult, index: number) {
 
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
-  // Unit test info for the test header
   const unitTestInfo = test.verification
     ? `${test.verification.numPassed}/${test.verification.numTests} unit tests`
     : "";
@@ -608,7 +606,6 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
   ).length;
   const skippedTests = data.tests.filter((t) => !t.verification).length;
 
-  // Calculate unit test totals from metadata or compute them
   const unitTestTotals: UnitTestTotals =
     metadata.unitTestTotals ??
     (() => {

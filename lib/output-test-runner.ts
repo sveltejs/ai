@@ -75,11 +75,9 @@ export async function runTestVerification(
 ): Promise<TestVerificationResult> {
   const startTime = Date.now();
 
-  // Run validation first (if validator exists)
   const validation = await runValidator(test, componentCode);
 
   if (validation && !validation.valid) {
-    // Validation failed - return early without running tests
     return {
       testName: test.name,
       passed: false,

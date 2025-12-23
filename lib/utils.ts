@@ -104,14 +104,12 @@ export async function withRetry<T>(
     retries,
     minTimeout,
     factor,
-    randomize: true, // Adds jitter to prevent thundering herd
+    randomize: true,
     onFailedAttempt: ({ error, attemptNumber, retriesLeft }) => {
-      // Log the error
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       console.log(`  ⚠️  Error: ${errorMessage}`);
 
-      // Calculate the delay for this attempt
       const attemptDelay = minTimeout * Math.pow(factor, attemptNumber - 1);
 
       if (retriesLeft > 0) {

@@ -48,7 +48,6 @@ import {
 } from "@clack/prompts";
 import { gateway } from "ai";
 
-// Settings persistence
 const SETTINGS_FILE = ".ai-settings.json";
 
 interface SavedSettings {
@@ -158,7 +157,6 @@ async function validateAndConfirmPricing(
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  // Load saved settings
   const savedSettings = loadSettings();
   if (savedSettings) {
     note("Loaded previous settings as defaults", "📋 Saved Settings");
@@ -169,7 +167,6 @@ async function selectOptions() {
   const gatewayModels = availableModels.models as GatewayModel[];
   const pricingMap = buildPricingMap(gatewayModels);
 
-  // Build model options with saved selections
   const modelOptions = [{ value: "custom", label: "Custom" }].concat(
     availableModels.models.reduce<Array<{ value: string; label: string }>>(
       (arr, model) => {
@@ -182,7 +179,6 @@ async function selectOptions() {
     ),
   );
 
-  // Determine initial values for model selection
   const savedModelValues = savedSettings?.models ?? [];
 
   const models = await multiselect({
@@ -217,7 +213,6 @@ async function selectOptions() {
     savedSettings?.pricingEnabled,
   );
 
-  // Determine saved MCP integration type
   const savedMcpIntegration = savedSettings?.mcpIntegration ?? "none";
 
   const mcpIntegration = await select({
@@ -241,14 +236,12 @@ async function selectOptions() {
   if (mcpIntegration !== "none") {
     mcpIntegrationType = mcpIntegration as "http" | "stdio";
 
-    // Check if we have a saved custom MCP URL for this integration type
     const savedMcpUrl = savedSettings?.mcpServerUrl;
     const defaultMcpUrl =
       mcpIntegration === "http"
         ? "https://mcp.svelte.dev/mcp"
         : "npx -y @sveltejs/mcp";
 
-    // Determine if the saved URL is custom (different from default)
     const hasSavedCustomUrl =
       !!savedMcpUrl &&
       savedSettings?.mcpIntegration === mcpIntegration &&
@@ -290,7 +283,6 @@ async function selectOptions() {
     process.exit(0);
   }
 
-  // Save settings for next run
   const newSettings: SavedSettings = {
     models: selectedModels,
     mcpIntegration: mcpIntegrationType,
@@ -383,7 +375,6 @@ async function runSingleTest(
       console.log("  📋 TestComponent tool is available");
     }
 
-    // Wrap agent.generate with retry logic
     const result = await withRetry(
       async () => agent.generate({ prompt: fullPrompt }),
       {
@@ -411,7 +402,6 @@ async function runSingleTest(
     console.log("  ⏳ Verifying against tests...");
     const verification = await runTestVerification(test, resultWriteContent);
 
-    // Display validation results
     if (verification.validation) {
       if (verification.validation.valid) {
         console.log("  ✓ Code validation passed");
@@ -595,7 +585,6 @@ async function main() {
     totalFailed += failed;
     const skipped = testResults.filter((r) => !r.verification).length;
 
-    // Calculate unit test totals
     const unitTestTotals = calculateUnitTestTotals(testResults);
 
     for (const result of testResults) {
@@ -610,14 +599,12 @@ async function main() {
           : "FAILED"
         : "SKIPPED";
 
-      // Show validation status if present
       const validationInfo = result.verification?.validation
         ? result.verification.validation.valid
           ? " (validated)"
           : " (validation failed)"
         : "";
 
-      // Show unit test counts
       const unitTestInfo = result.verification
         ? ` [${result.verification.numPassed}/${result.verification.numTests} unit tests]`
         : "";

@@ -42,7 +42,6 @@ export async function runValidator(
   }
 
   try {
-    // Dynamically import the validator module
     const validatorModule = (await import(validatorPath)) as ValidatorModule;
 
     if (typeof validatorModule.validate !== "function") {
@@ -56,7 +55,6 @@ export async function runValidator(
 
     const result = validatorModule.validate(code);
 
-    // Ensure the result has the correct shape
     if (typeof result.valid !== "boolean") {
       return {
         valid: false,
