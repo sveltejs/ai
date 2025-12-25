@@ -72,9 +72,12 @@ export function cleanupTestEnvironment(testName: string) {
 
 /**
  * Get the expected test count by running Vitest against the Reference implementation.
- * This uses Vitest's actual test discovery rather than regex parsing.
+ * If we just invoke startVitest directly on an invalid component, we can't get the actual test
+ * count since Vitest borks and doesn't load any tests.
  */
-export async function getExpectedTestCount(test: TestDefinition): Promise<number> {
+export async function getExpectedTestCount(
+  test: TestDefinition,
+): Promise<number> {
   const testDir = join(OUTPUTS_DIR, `${test.name}-reference-count`);
 
   try {
