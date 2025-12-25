@@ -413,7 +413,9 @@ async function runSingleTest(
       }
     }
 
-    if (verification.passed) {
+    if (verification.validationFailed) {
+      console.log("  ⊘ Tests not run (validation failed)");
+    } else if (verification.passed) {
       console.log(
         `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );

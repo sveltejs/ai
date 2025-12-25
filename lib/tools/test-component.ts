@@ -38,15 +38,19 @@ export function testComponentTool(test: TestDefinition) {
             valid: boolean;
             errors: string[];
           };
+          validationFailed?: boolean;
         } = {
           success: result.passed,
-          message: result.passed
-            ? `All ${result.numTests} tests passed!`
-            : `${result.numFailed} of ${result.numTests} tests failed`,
+          message: result.validationFailed
+            ? "Tests not run - validation failed"
+            : result.passed
+              ? `All ${result.numTests} tests passed!`
+              : `${result.numFailed} of ${result.numTests} tests failed`,
           passed: result.numPassed,
           failed: result.numFailed,
           total: result.numTests,
           duration: result.duration,
+          validationFailed: result.validationFailed,
         };
 
         // Include validation results if present

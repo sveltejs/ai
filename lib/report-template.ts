@@ -148,6 +148,18 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
       </div>`
     : "";
 
+  // Handle validation failed case separately
+  if (verification.validationFailed) {
+    return `${validationHtml}
+  <div class="verification-result skipped">
+    <div class="verification-header">
+      <span class="verification-icon">⊘</span>
+      <span class="verification-text">Tests not run - validation failed</span>
+      <span class="verification-stats">(${verification.duration}ms)</span>
+    </div>
+  </div>`;
+  }
+
   const statusClass = verification.passed ? "passed" : "failed";
   const statusIcon = verification.passed ? "✓" : "✗";
   const statusText = verification.passed ? "All tests passed" : "Tests failed";

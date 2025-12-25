@@ -27,6 +27,7 @@ export interface TestVerificationResult {
   error?: string;
   failedTests?: FailedTest[];
   validation?: ValidationResult | null;
+  validationFailed?: boolean;
 }
 
 export function setupOutputsDirectory() {
@@ -87,6 +88,7 @@ export async function runTestVerification(
       duration: Date.now() - startTime,
       error: `Validation failed: ${validation.errors.join("; ")}`,
       validation,
+      validationFailed: true,
     };
   }
 
