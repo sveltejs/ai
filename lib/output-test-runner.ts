@@ -77,20 +77,7 @@ export async function runTestVerification(
   const startTime = Date.now();
 
   const validation = await runValidator(test, componentCode);
-
-  if (validation && !validation.valid) {
-    return {
-      testName: test.name,
-      passed: false,
-      numTests: 0,
-      numPassed: 0,
-      numFailed: 0,
-      duration: Date.now() - startTime,
-      error: `Validation failed: ${validation.errors.join("; ")}`,
-      validation,
-      validationFailed: true,
-    };
-  }
+  const validationFailed = validation ? !validation.valid : undefined;
 
   try {
     const testDir = prepareTestEnvironment(test, componentCode);
@@ -111,6 +98,7 @@ export async function runTestVerification(
         duration: Date.now() - startTime,
         error: "Failed to start vitest",
         validation,
+        validationFailed,
       };
     }
 
@@ -142,6 +130,7 @@ export async function runTestVerification(
         error:
           allErrors.length > 0 ? allErrors.join("\n") : "No test modules found",
         validation,
+        validationFailed,
       };
     }
 
@@ -216,16 +205,23 @@ export async function runTestVerification(
 
     const numPassed = numTests - numFailed;
 
+    // Add validation errors to allErrors if validation failed
+    if (validationFailed && validation) {
+      const validationError = `Validation failed: ${validation.errors.join("; ")}`;
+      allErrors.unshift(validationError);
+    }
+
     return {
       testName: test.name,
-      passed: passed && numFailed === 0,
+      passed: !validationFailed && passed && numFailed === 0,
       numTests,
       numPassed,
       numFailed,
       duration: Date.now() - startTime,
       failedTests: failedTests.length > 0 ? failedTests : undefined,
-      error: allErrors.length > 0 && !passed ? allErrors[0] : undefined,
+      error: allErrors.length > 0 ? allErrors[0] : undefined,
       validation,
+      validationFailed,
     };
   } catch (error) {
     return {
@@ -237,6 +233,7 @@ export async function runTestVerification(
       duration: Date.now() - startTime,
       error: error instanceof Error ? error.message : String(error),
       validation,
+      validationFailed,
     };
   }
 }
