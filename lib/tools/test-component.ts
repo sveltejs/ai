@@ -42,7 +42,7 @@ export function testComponentTool(test: TestDefinition) {
         } = {
           success: result.passed,
           message: result.validationFailed
-            ? "Tests not run - validation failed"
+            ? `Validation failed. ${result.numPassed}/${result.numTests} tests passed.`
             : result.passed
               ? `All ${result.numTests} tests passed!`
               : `${result.numFailed} of ${result.numTests} tests failed`,
