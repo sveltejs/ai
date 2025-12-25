@@ -1,7 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { runTestVerification } from "./output-test-runner.ts";
 import type { TestDefinition } from "./test-discovery.ts";
 import { join } from "node:path";
+
+// Reset exit code after each test since runTestVerification runs inner Vitest
+// tests that may fail (expected behavior) and set process.exitCode = 1
+afterEach(() => {
+  process.exitCode = 0;
+});
 
 // Create a mock test definition
 function createMockTest(name: string): TestDefinition {
