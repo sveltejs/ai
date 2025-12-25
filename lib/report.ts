@@ -98,7 +98,7 @@ interface Metadata {
   pricingKey?: string | null;
   pricing?: PricingInfo | null;
   totalCost?: TotalCostInfo | null;
-  unitTestTotals?: UnitTestTotals | null;
+  unitTestTotals: UnitTestTotals;
 }
 
 export interface SingleTestResult {
@@ -180,6 +180,7 @@ export async function generateReport(
           mcpServerUrl: null,
           timestamp: new Date().toISOString(),
           model: "unknown",
+          unitTestTotals: { total: 0, passed: 0, failed: 0, score: 0 },
         },
       };
       html = generateMultiTestHtml(multiTestData);

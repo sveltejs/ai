@@ -5,7 +5,6 @@ import type {
   SingleTestResult,
   UnitTestTotals,
 } from "./report.ts";
-import { calculateUnitTestTotals } from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
 
@@ -619,8 +618,7 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
   ).length;
   const skippedTests = data.tests.filter((t) => !t.verification).length;
 
-  const unitTestTotals: UnitTestTotals =
-    metadata.unitTestTotals ?? calculateUnitTestTotals(data.tests);
+  const unitTestTotals = metadata.unitTestTotals;
 
   const totalTokens = data.tests.reduce(
     (sum, test) =>
