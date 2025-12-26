@@ -28,6 +28,11 @@ bun tsc --noEmit
 
 # Format code with Prettier
 bun run prettier
+
+# Secrets management
+bun run secrets                       # Show token status
+bun run secrets set VERCEL_OIDC_TOKEN <value>  # Store Vercel token
+bun run secrets get VERCEL_OIDC_TOKEN           # Get Vercel token
 ```
 
 ## Environment Variables
@@ -45,11 +50,45 @@ Required environment variable:
 
 ### MCP Server Configuration
 
-MCP integration is configured via the interactive CLI at runtime. Options:
+MCP integration is configured via the interactive CLI at runtime. The CLI presents three options:
 
 - **No MCP Integration**: Agent runs with built-in tools only
 - **MCP over HTTP**: Uses HTTP transport (default: `https://mcp.svelte.dev/mcp`)
 - **MCP over StdIO**: Uses local command (default: `npx -y @sveltejs/mcp`)
+
+You can provide custom MCP servers when prompted during the interactive setup.
+
+**Behavior:**
+
+- If MCP server starts with `http://` or `https://`: Uses HTTP transport with that URL
+- If MCP server is set but not an HTTP URL: Uses StdIO transport, treating the value as a command string
+- If no MCP is selected: Agent runs without MCP tools (only built-in tools)
+- MCP transport type (HTTP or StdIO) and configuration are documented in the result JSON and HTML report
+
+### Required API Keys
+
+- `VERCEL_OIDC_TOKEN`: Required for Vercel AI Gateway (stored in bun.secrets)
+- Other API keys (Anthropic, OpenAI, OpenRouter) are configured in Vercel dashboard when using AI Gateway
+
+### Secrets Management
+
+The tool uses Bun's secure credential storage for the Vercel OIDC token:
+
+```bash
+# Store Vercel OIDC token
+bun run secrets set VERCEL_OIDC_TOKEN your_token_here
+
+# Check if token is stored
+bun run secrets
+
+# Get the stored token
+bun run secrets get VERCEL_OIDC_TOKEN
+```
+
+**Security Benefits:**
+- Encrypted storage using OS credential manager (Keychain, libsecret, Windows Credential Manager)
+- No plaintext tokens in files
+- User-level access control
 
 ## Architecture
 

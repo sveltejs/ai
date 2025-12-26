@@ -47,6 +47,7 @@ import {
   note,
 } from "@clack/prompts";
 import { gateway } from "ai";
+import { loadTokenToEnv } from "./scripts/secrets.ts";
 
 const SETTINGS_FILE = ".ai-settings.json";
 
@@ -462,6 +463,9 @@ async function runSingleTest(
 }
 
 async function main() {
+  // Load VERCEL_OIDC_TOKEN from bun.secrets
+  await loadTokenToEnv();
+  
   const { models, mcp, testingTool, pricing } = await selectOptions();
 
   const mcpServerUrl = mcp;
