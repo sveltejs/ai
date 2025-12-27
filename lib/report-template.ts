@@ -323,6 +323,16 @@ function renderPricingSection(data: MultiTestResultData) {
       ? `<span class="pricing-key" title="Key matched in model-pricing.json">${escapeHtml(pricingKey)}</span>`
       : "";
 
+    const cacheReadText =
+      pricing.cacheReadCostPerMTok !== undefined
+        ? `<span class="rate-separator">·</span><span class="rate-value">${formatMTokCost(pricing.cacheReadCostPerMTok)}/MTok cache read</span>`
+        : "";
+
+    const cacheWriteText =
+      pricing.cacheCreationCostPerMTok !== undefined
+        ? `<span class="rate-separator">·</span><span class="rate-value">${formatMTokCost(pricing.cacheCreationCostPerMTok)}/MTok cache write</span>`
+        : "";
+
     pricingInfoHtml = `
       <div class="pricing-rates">
         <span class="rate-label">Model Pricing:</span>
@@ -330,21 +340,33 @@ function renderPricingSection(data: MultiTestResultData) {
         <span class="rate-value">${formatMTokCost(pricing.inputCostPerMTok)}/MTok in</span>
         <span class="rate-separator">·</span>
         <span class="rate-value">${formatMTokCost(pricing.outputCostPerMTok)}/MTok out</span>
-        ${pricing.cacheReadCostPerMTok !== undefined ? `<span class="rate-separator">·</span><span class="rate-value">${formatMTokCost(pricing.cacheReadCostPerMTok)}/MTok cached</span>` : ""}
+        ${cacheReadText}
+        ${cacheWriteText}
       </div>
     `;
   }
 
   let costBreakdownHtml = "";
   if (totalCost) {
-    const uncachedInputTokens =
-      totalCost.inputTokens - totalCost.cachedInputTokens;
+    const cacheSimRow =
+      data.metadata.cacheSimulation &&
+      pricing?.cacheReadCostPerMTok !== undefined &&
+      (data.metadata.cacheSimulation.cacheHits > 0 ||
+        data.metadata.cacheSimulation.cacheWriteTokens > 0)
+        ? `
+        <div class="cost-row simulated">
+          <span class="cost-label">Estimated cost with prompt cache:</span>
+          <span class="cost-tokens">${data.metadata.cacheSimulation.cacheHits.toLocaleString()} reads + ${data.metadata.cacheSimulation.cacheWriteTokens.toLocaleString()} writes = ${(data.metadata.cacheSimulation.cacheHits + data.metadata.cacheSimulation.cacheWriteTokens).toLocaleString()} tokens</span>
+          <span class="cost-value">${formatCost(data.metadata.cacheSimulation.simulatedCostWithCache)}</span>
+        </div>
+        `
+        : "";
 
     costBreakdownHtml = `
       <div class="cost-breakdown">
         <div class="cost-row">
           <span class="cost-label">Input tokens:</span>
-          <span class="cost-tokens">${uncachedInputTokens.toLocaleString()}</span>
+          <span class="cost-tokens">${totalCost.inputTokens.toLocaleString()}</span>
           <span class="cost-value">${formatCost(totalCost.inputCost)}</span>
         </div>
         <div class="cost-row">
@@ -356,9 +378,9 @@ function renderPricingSection(data: MultiTestResultData) {
           totalCost.cachedInputTokens > 0
             ? `
         <div class="cost-row cached">
-          <span class="cost-label">Cached tokens:</span>
+          <span class="cost-label">Cached tokens (from usage):</span>
           <span class="cost-tokens">${totalCost.cachedInputTokens.toLocaleString()} ⚡</span>
-          <span class="cost-value">${formatCost(totalCost.cacheReadCost)}</span>
+          <span class="cost-value">-</span>
         </div>
         `
             : ""
@@ -368,6 +390,7 @@ function renderPricingSection(data: MultiTestResultData) {
           <span class="cost-tokens"></span>
           <span class="cost-value">${formatCost(totalCost.totalCost)}</span>
         </div>
+        ${cacheSimRow}
       </div>
     `;
   }
@@ -459,7 +482,7 @@ function getPricingStyles() {
 
     .cost-row {
       display: grid;
-      grid-template-columns: 120px 1fr auto;
+      grid-template-columns: 200px 1fr auto;
       gap: 8px;
       align-items: center;
       font-size: 13px;
@@ -467,6 +490,14 @@ function getPricingStyles() {
 
     .cost-row.cached {
       color: var(--text-muted);
+    }
+
+    .cost-row.simulated {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      color: var(--text-muted);
+      font-style: italic;
     }
 
     .cost-row.total {
@@ -499,6 +530,10 @@ function getPricingStyles() {
     .cost-row.total .cost-value {
       color: var(--success);
       font-size: 15px;
+    }
+
+    .cost-row.simulated .cost-value {
+      color: var(--mcp-enabled);
     }
 
     /* Validation styles */
