@@ -9,11 +9,12 @@ export interface TestDefinition {
   testFile: string;
   promptFile: string;
   prompt: string;
+  testContent: string;
 }
 
-export function discoverTests() {
+export function discoverTests(): TestDefinition[] {
   const testsDir = join(process.cwd(), "tests");
-  const definitions = [];
+  const definitions: TestDefinition[] = [];
 
   try {
     const entries = readdirSync(testsDir);
@@ -34,6 +35,7 @@ export function discoverTests() {
           existsSync(promptFile)
         ) {
           const prompt = readFileSync(promptFile, "utf-8");
+          const testContent = readFileSync(testFile, "utf-8");
 
           definitions.push({
             name: entry,
@@ -43,6 +45,7 @@ export function discoverTests() {
             testFile,
             promptFile,
             prompt,
+            testContent,
           });
         } else {
           const missing = [];

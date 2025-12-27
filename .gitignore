@@ -36,9 +36,12 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# results directory (ignore HTML files but keep JSON and .gitkeep)
+# results directory (only keep JSON files, HTML is generated in CI)
 results/*
 !results/.gitkeep
 !results/*.json
 .vercel
 .env*.local
+
+# AI benchmark settings (auto-generated)
+.ai-settings.json

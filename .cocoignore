@@ -2,3 +2,6 @@
 results/
 .claude
 patches
+.github/prompts
+GEMINI.md
+CLAUDE.md

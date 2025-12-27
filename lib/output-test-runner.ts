@@ -8,6 +8,7 @@ import {
 import { join } from "node:path";
 import { startVitest } from "vitest/node";
 import type { TestDefinition } from "./test-discovery.ts";
+import { runValidator, type ValidationResult } from "./validator-runner.ts";
 
 const OUTPUTS_DIR = join(process.cwd(), "outputs");
 
@@ -25,6 +26,8 @@ export interface TestVerificationResult {
   duration: number;
   error?: string;
   failedTests?: FailedTest[];
+  validation?: ValidationResult | null;
+  validationFailed?: boolean;
 }
 
 export function setupOutputsDirectory() {
@@ -67,11 +70,75 @@ export function cleanupTestEnvironment(testName: string) {
   }
 }
 
+/**
+ * Get the expected test count by running Vitest against the Reference implementation.
+ * If we just invoke startVitest directly on an invalid component, we can't get the actual test
+ * count since Vitest borks and doesn't load any tests.
+ */
+export async function getExpectedTestCount(
+  test: TestDefinition,
+): Promise<number> {
+  const testDir = join(OUTPUTS_DIR, `${test.name}-reference-count`);
+
+  try {
+    // Setup temp directory with Reference component
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+    mkdirSync(testDir, { recursive: true });
+
+    // Copy Reference as Component.svelte
+    const componentPath = join(testDir, "Component.svelte");
+    copyFileSync(test.referenceFile, componentPath);
+
+    // Copy test file
+    const testFilePath = join(testDir, "test.ts");
+    copyFileSync(test.testFile, testFilePath);
+
+    // Run vitest to collect tests
+    const vitest = await startVitest("test", [testFilePath], {
+      watch: false,
+      reporters: [],
+      run: true,
+    });
+
+    if (!vitest) {
+      return 0;
+    }
+
+    await vitest.close();
+
+    // Count tests from modules
+    const testModules = vitest.state.getTestModules();
+    let testCount = 0;
+
+    for (const module of testModules) {
+      if (module.children) {
+        const tests = Array.from(module.children.allTests());
+        testCount += tests.length;
+      }
+    }
+
+    return testCount;
+  } catch (error) {
+    console.error(`Error getting expected test count for ${test.name}:`, error);
+    return 0;
+  } finally {
+    // Cleanup
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  }
+}
+
 export async function runTestVerification(
   test: TestDefinition,
   componentCode: string,
-) {
+): Promise<TestVerificationResult> {
   const startTime = Date.now();
+
+  const validation = await runValidator(test, componentCode);
+  const validationFailed = validation ? !validation.valid : undefined;
 
   try {
     const testDir = prepareTestEnvironment(test, componentCode);
@@ -83,14 +150,19 @@ export async function runTestVerification(
     });
 
     if (!vitest) {
+      // Get expected test count from Reference
+      const expectedTestCount = await getExpectedTestCount(test);
+
       return {
         testName: test.name,
         passed: false,
-        numTests: 0,
+        numTests: expectedTestCount,
         numPassed: 0,
-        numFailed: 0,
+        numFailed: expectedTestCount,
         duration: Date.now() - startTime,
         error: "Failed to start vitest",
+        validation,
+        validationFailed,
       };
     }
 
@@ -112,15 +184,26 @@ export async function runTestVerification(
     let numFailed = 0;
 
     if (!testModules || testModules.length === 0) {
+      // Get expected test count from Reference when no modules found
+      const expectedTestCount = await getExpectedTestCount(test);
+
+      // Add validation errors to allErrors if validation failed
+      if (validationFailed && validation) {
+        const validationError = `Validation failed: ${validation.errors.join("; ")}`;
+        allErrors.unshift(validationError);
+      }
+
       return {
         testName: test.name,
         passed: false,
-        numTests: 0,
+        numTests: expectedTestCount,
         numPassed: 0,
-        numFailed: 0,
+        numFailed: expectedTestCount,
         duration: Date.now() - startTime,
         error:
           allErrors.length > 0 ? allErrors.join("\n") : "No test modules found",
+        validation,
+        validationFailed,
       };
     }
 
@@ -193,27 +276,49 @@ export async function runTestVerification(
       }
     }
 
+    // If we got 0 tests from vitest but component couldn't load, get count from Reference
+    if (numTests === 0) {
+      const expectedTestCount = await getExpectedTestCount(test);
+      if (expectedTestCount > 0) {
+        numTests = expectedTestCount;
+        numFailed = expectedTestCount;
+      }
+    }
+
     const numPassed = numTests - numFailed;
+
+    // Add validation errors to allErrors if validation failed
+    if (validationFailed && validation) {
+      const validationError = `Validation failed: ${validation.errors.join("; ")}`;
+      allErrors.unshift(validationError);
+    }
 
     return {
       testName: test.name,
-      passed: passed && numFailed === 0,
+      passed: !validationFailed && passed && numFailed === 0,
       numTests,
       numPassed,
       numFailed,
       duration: Date.now() - startTime,
       failedTests: failedTests.length > 0 ? failedTests : undefined,
-      error: allErrors.length > 0 && !passed ? allErrors[0] : undefined,
+      error: allErrors.length > 0 ? allErrors[0] : undefined,
+      validation,
+      validationFailed,
     };
   } catch (error) {
+    // Get expected test count on error
+    const expectedTestCount = await getExpectedTestCount(test);
+
     return {
       testName: test.name,
       passed: false,
-      numTests: 0,
+      numTests: expectedTestCount,
       numPassed: 0,
-      numFailed: 0,
+      numFailed: expectedTestCount,
       duration: Date.now() - startTime,
       error: error instanceof Error ? error.message : String(error),
+      validation,
+      validationFailed,
     };
   }
 }

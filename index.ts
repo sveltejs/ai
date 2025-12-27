@@ -1,13 +1,18 @@
 import { Experimental_Agent as Agent, hasToolCall, stepCountIs } from "ai";
 import { experimental_createMCPClient as createMCPClient } from "./node_modules/@ai-sdk/mcp/dist/index.mjs";
 import { Experimental_StdioMCPTransport as StdioMCPTransport } from "./node_modules/@ai-sdk/mcp/dist/mcp-stdio/index.mjs";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { generateReport, type SingleTestResult } from "./lib/report.ts";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import {
+  generateReport,
+  calculateUnitTestTotals,
+  type SingleTestResult,
+} from "./lib/report.ts";
 import {
   getTimestampedFilename,
   isHttpUrl,
   extractResultWriteContent,
   calculateTotalCost,
+  withRetry,
   buildAgentPrompt,
   simulateCacheSavings,
 } from "./lib/utils.ts";
@@ -39,9 +44,40 @@ import {
 } from "@clack/prompts";
 import { gateway } from "ai";
 
+const SETTINGS_FILE = ".ai-settings.json";
+
+interface SavedSettings {
+  models: string[];
+  mcpIntegration: "none" | "http" | "stdio";
+  mcpServerUrl?: string;
+  testingTool: boolean;
+  pricingEnabled: boolean;
+}
+
+function loadSettings(): SavedSettings | null {
+  try {
+    if (existsSync(SETTINGS_FILE)) {
+      const content = readFileSync(SETTINGS_FILE, "utf-8");
+      return JSON.parse(content) as SavedSettings;
+    }
+  } catch (error) {
+    console.warn("⚠️  Could not load saved settings, using defaults");
+  }
+  return null;
+}
+
+function saveSettings(settings: SavedSettings): void {
+  try {
+    writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch (error) {
+    console.warn("⚠️  Could not save settings");
+  }
+}
+
 async function validateAndConfirmPricing(
   models: string[],
   pricingMap: ReturnType<typeof buildPricingMap>,
+  savedPricingEnabled?: boolean,
 ) {
   const lookups = new Map<string, ReturnType<typeof lookupPricingFromMap>>();
 
@@ -72,7 +108,7 @@ async function validateAndConfirmPricing(
 
     const usePricing = await confirm({
       message: "Enable cost calculation?",
-      initialValue: true,
+      initialValue: savedPricingEnabled ?? true,
     });
 
     if (isCancel(usePricing)) {
@@ -133,22 +169,34 @@ async function validateAndConfirmPricing(
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  const available_models = await gateway.getAvailableModels();
+  const savedSettings = loadSettings();
+  if (savedSettings) {
+    note("Loaded previous settings as defaults", "📋 Saved Settings");
+  }
 
-  const pricingMap = buildPricingMap(available_models.models);
+  const availableModels = await gateway.getAvailableModels();
+
+  const pricingMap = buildPricingMap(availableModels.models);
+
+  const modelOptions = [{ value: "custom", label: "Custom" }].concat(
+    availableModels.models.reduce<Array<{ value: string; label: string }>>(
+      (arr, model) => {
+        if (model.modelType === "language") {
+          arr.push({ value: model.id, label: model.name });
+        }
+        return arr;
+      },
+      [],
+    ),
+  );
+
+  const savedModelValues = savedSettings?.models ?? [];
 
   const models = await multiselect({
     message: "Select model(s) to benchmark",
-    options: [{ value: "custom", label: "Custom" }].concat(
-      available_models.models.reduce<Array<{ value: string; label: string }>>(
-        (arr, model) => {
-          if (model.modelType === "language") {
-            arr.push({ value: model.id, label: model.name });
-          }
-          return arr;
-        },
-        [],
-      ),
+    options: modelOptions,
+    initialValues: savedModelValues.filter((m) =>
+      modelOptions.some((opt) => opt.value === m),
     ),
   });
 
@@ -158,41 +206,61 @@ async function selectOptions() {
   }
 
   if (models.includes("custom")) {
-    const custom_model = await text({
+    const customModel = await text({
       message: "Enter custom model id",
     });
-    if (isCancel(custom_model)) {
+    if (isCancel(customModel)) {
       cancel("Operation cancelled.");
       process.exit(0);
     }
-    models.push(custom_model);
+    models.push(customModel);
   }
 
   const selectedModels = models.filter((model) => model !== "custom");
 
-  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
+  const pricing = await validateAndConfirmPricing(
+    selectedModels,
+    pricingMap,
+    savedSettings?.pricingEnabled,
+  );
 
-  const mcp_integration = await select({
+  const savedMcpIntegration = savedSettings?.mcpIntegration ?? "none";
+
+  const mcpIntegration = await select({
     message: "Which MCP integration to use?",
     options: [
       { value: "none", label: "No MCP Integration" },
       { value: "http", label: "MCP over HTTP" },
       { value: "stdio", label: "MCP over StdIO" },
     ],
-    initialValue: "http",
+    initialValue: savedMcpIntegration,
   });
 
-  if (isCancel(mcp_integration)) {
+  if (isCancel(mcpIntegration)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
 
   let mcp: string | undefined = undefined;
+  let mcpIntegrationType: "none" | "http" | "stdio" = "none";
 
-  if (mcp_integration !== "none") {
+  if (mcpIntegration !== "none") {
+    mcpIntegrationType = mcpIntegration as "http" | "stdio";
+
+    const savedMcpUrl = savedSettings?.mcpServerUrl;
+    const defaultMcpUrl =
+      mcpIntegration === "http"
+        ? "https://mcp.svelte.dev/mcp"
+        : "npx -y @sveltejs/mcp";
+
+    const hasSavedCustomUrl =
+      !!savedMcpUrl &&
+      savedSettings?.mcpIntegration === mcpIntegration &&
+      savedMcpUrl !== defaultMcpUrl;
+
     const custom = await confirm({
       message: "Do you want to provide a custom MCP server/command?",
-      initialValue: false,
+      initialValue: hasSavedCustomUrl ?? false,
     });
 
     if (isCancel(custom)) {
@@ -201,32 +269,39 @@ async function selectOptions() {
     }
 
     if (custom) {
-      const custom_mcp = await text({
+      const customMcp = await text({
         message: "Insert custom url or command",
+        initialValue: hasSavedCustomUrl ? savedMcpUrl : undefined,
       });
-      if (isCancel(custom_mcp)) {
+      if (isCancel(customMcp)) {
         cancel("Operation cancelled.");
         process.exit(0);
       }
 
-      mcp = custom_mcp;
+      mcp = customMcp;
     } else {
-      mcp =
-        mcp_integration === "http"
-          ? "https://mcp.svelte.dev/mcp"
-          : "npx -y @sveltejs/mcp";
+      mcp = defaultMcpUrl;
     }
   }
 
   const testingTool = await confirm({
     message: "Do you want to provide the testing tool to the model?",
-    initialValue: true,
+    initialValue: savedSettings?.testingTool ?? true,
   });
 
   if (isCancel(testingTool)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
+
+  const newSettings: SavedSettings = {
+    models: selectedModels,
+    mcpIntegration: mcpIntegrationType,
+    mcpServerUrl: mcp,
+    testingTool,
+    pricingEnabled: pricing.enabled,
+  };
+  saveSettings(newSettings);
 
   return {
     models: selectedModels,
@@ -310,15 +385,27 @@ async function runSingleTest(
     if (testComponentEnabled) {
       console.log("  📋 TestComponent tool is available");
     }
-    const result = await agent.generate({ messages });
+
+    const result = await withRetry(
+      async () => agent.generate({ messages }),
+      {
+        retries: 10,
+        minTimeout: 1000,
+        factor: 2,
+      },
+    );
 
     const resultWriteContent = extractResultWriteContent(result.steps);
 
     if (!resultWriteContent) {
       console.log("  ⚠️  No ResultWrite output found");
+      const promptContent = messages[0]?.content;
+      const promptStr = typeof promptContent === "string"
+        ? promptContent
+        : JSON.stringify(promptContent);
       return {
         testName: test.name,
-        prompt: test.prompt,
+        prompt: promptStr,
         steps: result.steps as unknown as SingleTestResult["steps"],
         resultWriteContent: null,
         verification: null,
@@ -330,35 +417,59 @@ async function runSingleTest(
     console.log("  ⏳ Verifying against tests...");
     const verification = await runTestVerification(test, resultWriteContent);
 
-    if (verification.passed) {
+    if (verification.validation) {
+      if (verification.validation.valid) {
+        console.log("  ✓ Code validation passed");
+      } else {
+        console.log("  ✗ Code validation failed:");
+        for (const error of verification.validation.errors) {
+          console.log(`    - ${error}`);
+        }
+      }
+    }
+
+    if (verification.validationFailed) {
       console.log(
-        `✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
+        `  ⊘ Validation failed (${verification.numPassed}/${verification.numTests} tests passed)`,
+      );
+    } else if (verification.passed) {
+      console.log(
+        `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );
     } else {
       console.log(
-        `✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
+        `  ✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
-          console.log(`- ${ft.fullName}`);
+          console.log(`    - ${ft.fullName}`);
         }
       }
     }
 
     cleanupTestEnvironment(test.name);
 
+    const promptContent = messages[0]?.content;
+    const promptStr = typeof promptContent === "string"
+      ? promptContent
+      : JSON.stringify(promptContent);
+
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: promptStr,
       steps: result.steps as unknown as SingleTestResult["steps"],
       resultWriteContent,
       verification,
     };
   } catch (error) {
-    console.error(`✗ Error running test: ${error}`);
+    console.error(`  ✗ Error running test: ${error}`);
+    const promptContent = messages[0]?.content;
+    const promptStr = typeof promptContent === "string"
+      ? promptContent
+      : JSON.stringify(promptContent);
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: promptStr,
       steps: [],
       resultWriteContent: null,
       verification: {
@@ -488,7 +599,7 @@ async function main() {
 
     const model = gateway.languageModel(modelId);
 
-    const testResults = [];
+    const testResults: SingleTestResult[] = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -518,6 +629,8 @@ async function main() {
     totalFailed += failed;
     const skipped = testResults.filter((r) => !r.verification).length;
 
+    const unitTestTotals = calculateUnitTestTotals(testResults);
+
     for (const result of testResults) {
       const status = result.verification
         ? result.verification.passed
@@ -529,13 +642,28 @@ async function main() {
           ? "PASSED"
           : "FAILED"
         : "SKIPPED";
-      console.log(`${status} ${result.testName}: ${statusText}`);
+
+      const validationInfo = result.verification?.validation
+        ? result.verification.validation.valid
+          ? " (validated)"
+          : " (validation failed)"
+        : "";
+
+      const unitTestInfo = result.verification
+        ? ` [${result.verification.numPassed}/${result.verification.numTests} unit tests]`
+        : "";
+
+      console.log(
+        `${status} ${result.testName}: ${statusText}${validationInfo}${unitTestInfo}`,
+      );
     }
 
     console.log("─".repeat(50));
     console.log(
-      `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
+      `Test Suites: ✓ ${passed} passed  ✗ ${failed} failed  ${skipped > 0 ? `⊘ ${skipped} skipped  ` : ""}(${unitTestTotals.passed}/${unitTestTotals.total} unit tests)`,
     );
+    console.log(`Score:       ${unitTestTotals.score}%`);
+    console.log(`Duration:    ${(totalDuration / 1000).toFixed(1)}s`);
 
     let totalCost = null;
     let pricingInfo = null;
@@ -624,6 +752,7 @@ async function main() {
         pricing: pricingInfo,
         totalCost,
         cacheSimulation,
+        unitTestTotals,
       },
     };
 

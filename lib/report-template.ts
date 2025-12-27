@@ -1,5 +1,10 @@
 import type { TestVerificationResult } from "./output-test-runner.ts";
-import type { MultiTestResultData, SingleTestResult } from "./report.ts";
+import type { ValidationResult } from "./validator-runner.ts";
+import type {
+  MultiTestResultData,
+  SingleTestResult,
+  UnitTestTotals,
+} from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
 
@@ -98,6 +103,36 @@ function renderContentBlock(block: ContentBlock) {
   return "";
 }
 
+function renderValidationResult(
+  validation: ValidationResult | null | undefined,
+) {
+  if (!validation) {
+    return "";
+  }
+
+  const statusClass = validation.valid ? "passed" : "failed";
+  const statusIcon = validation.valid ? "✓" : "✗";
+  const statusText = validation.valid
+    ? "Validation passed"
+    : "Validation failed";
+
+  let errorsHtml = "";
+  if (validation.errors && validation.errors.length > 0) {
+    const errorItems = validation.errors
+      .map((err) => `<li class="validation-error-item">${escapeHtml(err)}</li>`)
+      .join("");
+    errorsHtml = `<ul class="validation-errors">${errorItems}</ul>`;
+  }
+
+  return `<div class="validation-result ${statusClass}">
+    <div class="validation-header">
+      <span class="validation-icon">${statusIcon}</span>
+      <span class="validation-text">${statusText}</span>
+    </div>
+    ${errorsHtml}
+  </div>`;
+}
+
 function renderVerificationResult(verification: TestVerificationResult | null) {
   if (!verification) {
     return `<div class="verification-result skipped">
@@ -106,9 +141,32 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
     </div>`;
   }
 
-  const statusClass = verification.passed ? "passed" : "failed";
-  const statusIcon = verification.passed ? "✓" : "✗";
-  const statusText = verification.passed ? "All tests passed" : "Tests failed";
+  const validationHtml = verification.validation
+    ? `<div class="validation-section">
+        <h5>Code Validation</h5>
+        ${renderValidationResult(verification.validation)}
+      </div>`
+    : "";
+
+  // When validation fails, report 0 passed regardless of actual results
+  const reportedPassed = verification.validationFailed ? 0 : verification.numPassed;
+
+  // Determine status class and icon based on validation and test results
+  const statusClass = verification.validationFailed
+    ? "failed"
+    : verification.passed
+      ? "passed"
+      : "failed";
+  const statusIcon = verification.validationFailed
+    ? "⊘"
+    : verification.passed
+      ? "✓"
+      : "✗";
+  const statusText = verification.validationFailed
+    ? `Validation failed (0/${verification.numTests} tests counted as passed)`
+    : verification.passed
+      ? "All tests passed"
+      : "Tests failed";
 
   let failedTestsHtml = "";
   if (verification.failedTests && verification.failedTests.length > 0) {
@@ -131,11 +189,12 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
     errorHtml = `<div class="verification-error">Error: ${escapeHtml(verification.error)}</div>`;
   }
 
-  return `<div class="verification-result ${statusClass}">
+  return `${validationHtml}
+  <div class="verification-result ${statusClass}">
     <div class="verification-header">
       <span class="verification-icon">${statusIcon}</span>
       <span class="verification-text">${statusText}</span>
-      <span class="verification-stats">${verification.numPassed}/${verification.numTests} tests (${verification.duration}ms)</span>
+      <span class="verification-stats">${reportedPassed}/${verification.numTests} tests (${verification.duration}ms)</span>
     </div>
     ${errorHtml}
     ${failedTestsHtml}
@@ -197,6 +256,13 @@ function renderTestSection(test: SingleTestResult, index: number) {
 
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
+  // When validation fails, report 0 passed regardless of actual results
+  const unitTestInfo = test.verification
+    ? test.verification.validationFailed
+      ? `0/${test.verification.numTests} unit tests (validation failed)`
+      : `${test.verification.numPassed}/${test.verification.numTests} unit tests`
+    : "";
+
   const resultWriteHtml = test.resultWriteContent
     ? `<div class="output-section">
         <div class="token-summary">
@@ -220,7 +286,7 @@ function renderTestSection(test: SingleTestResult, index: number) {
     <summary class="test-header">
       <span class="test-status ${verificationStatus}">${verificationIcon}</span>
       <span class="test-name">${escapeHtml(test.testName)}</span>
-      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens</span>
+      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens${unitTestInfo ? ` · ${unitTestInfo}` : ""}</span>
     </summary>
     <div class="test-content">
       <details class="prompt-section">
@@ -339,6 +405,13 @@ function renderPricingSection(data: MultiTestResultData) {
       ${costBreakdownHtml}
     </div>
   `;
+}
+
+function getScoreClass(score: number): string {
+  if (score >= 90) return "excellent";
+  if (score >= 70) return "good";
+  if (score >= 50) return "fair";
+  return "poor";
 }
 
 function getPricingStyles() {
@@ -462,6 +535,119 @@ function getPricingStyles() {
     .cost-row.simulated .cost-value {
       color: var(--mcp-enabled);
     }
+
+    /* Validation styles */
+    .validation-section {
+      margin-bottom: 12px;
+    }
+
+    .validation-section h5 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .validation-result {
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .validation-result.passed {
+      background: var(--passed-bg);
+      border-color: var(--passed-border);
+    }
+
+    .validation-result.failed {
+      background: var(--failed-bg);
+      border-color: var(--failed-border);
+    }
+
+    .validation-result .validation-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .validation-result .validation-icon {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .validation-result.passed .validation-icon { color: var(--success); }
+    .validation-result.failed .validation-icon { color: var(--error); }
+
+    .validation-result .validation-text {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .validation-errors {
+      margin-top: 8px;
+      padding-left: 20px;
+      list-style: disc;
+    }
+
+    .validation-error-item {
+      color: var(--error);
+      font-size: 12px;
+      margin: 4px 0;
+    }
+
+    /* Unit test inline styles */
+    .unit-tests-inline {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    /* Score badge styles */
+    .score-badge {
+      font-size: 18px;
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .score-badge.excellent {
+      background: var(--success);
+      color: white;
+    }
+
+    .score-badge.good {
+      background: #2ea043;
+      color: white;
+    }
+
+    .score-badge.fair {
+      background: var(--warning);
+      color: white;
+    }
+
+    .score-badge.poor {
+      background: var(--error);
+      color: white;
+    }
+
+    /* Summary bar improvements */
+    .summary-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .summary-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
   `;
 }
 
@@ -473,6 +659,8 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
     (t) => t.verification && !t.verification.passed,
   ).length;
   const skippedTests = data.tests.filter((t) => !t.verification).length;
+
+  const unitTestTotals = metadata.unitTestTotals;
 
   const totalTokens = data.tests.reduce(
     (sum, test) =>
@@ -498,12 +686,7 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
     ? `<span class="cost-badge">${formatCost(metadata.totalCost.totalCost)}</span>`
     : "";
 
-  const overallStatus =
-    failedTests === 0 && skippedTests === 0
-      ? "all-passed"
-      : failedTests > 0
-        ? "has-failures"
-        : "has-skipped";
+  const scoreClass = getScoreClass(unitTestTotals.score);
 
   const testsHtml = data.tests
     .map((test, index) => renderTestSection(test, index))
@@ -544,9 +727,13 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
       <button class="theme-toggle" onclick="toggleTheme()">◐</button>
     </div>
     <div class="summary-bar">
-      <div class="summary-item passed">✓ ${passedTests} passed</div>
-      <div class="summary-item failed">✗ ${failedTests} failed</div>
-      ${skippedTests > 0 ? `<div class="summary-item skipped">⊘ ${skippedTests} skipped</div>` : ""}
+      <span class="score-badge ${scoreClass}" title="Score: ${unitTestTotals.passed} passed / ${unitTestTotals.total} total unit tests">${unitTestTotals.score}%</span>
+      <div class="summary-group">
+        <div class="summary-item passed">✓ ${passedTests} passed</div>
+        <div class="summary-item failed">✗ ${failedTests} failed</div>
+        ${skippedTests > 0 ? `<div class="summary-item skipped">⊘ ${skippedTests} skipped</div>` : ""}
+        <span class="unit-tests-inline">(${unitTestTotals.passed}/${unitTestTotals.total} unit tests)</span>
+      </div>
     </div>
   </header>
 
