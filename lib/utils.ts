@@ -118,13 +118,16 @@ export function simulateCacheSavings(
   tests: SingleTestResult[],
   pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
 ) {
-  // Default rates if not specified:
-  // - Cache read: 10% of input cost
-  // - Cache creation: 125% of input cost (25% premium)
-  const cacheReadRate =
-    pricing.cacheReadInputTokenCost ?? pricing.inputCostPerToken * 0.1;
-  const cacheWriteRate =
-    pricing.cacheCreationInputTokenCost ?? pricing.inputCostPerToken * 1.25;
+  if (
+    pricing.cacheReadInputTokenCost === undefined ||
+    pricing.cacheCreationInputTokenCost === undefined
+  ) {
+    throw new Error(
+      "Cache pricing is required: cacheReadInputTokenCost and cacheCreationInputTokenCost must be defined",
+    );
+  }
+  const cacheReadRate = pricing.cacheReadInputTokenCost;
+  const cacheWriteRate = pricing.cacheCreationInputTokenCost;
 
   let totalCacheHits = 0; // Total tokens read from cache across all steps
   let totalCacheWriteTokens = 0; // Total tokens written to cache (including step 1)

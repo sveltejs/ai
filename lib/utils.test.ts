@@ -289,12 +289,14 @@ describe("TokenCache", () => {
 });
 
 describe("simulateCacheSavings - growing prefix model", () => {
-  // Default pricing: input=$1/MTok, output=$2/MTok
-  // Default cache read: 10% of input = $0.10/MTok
-  // Default cache write: 125% of input = $1.25/MTok
+  // Pricing: input=$1/MTok, output=$2/MTok
+  // Cache read: 10% of input = $0.10/MTok
+  // Cache write: 125% of input = $1.25/MTok
   const basicPricing = {
     inputCostPerToken: 1.0 / 1_000_000,
     outputCostPerToken: 2.0 / 1_000_000,
+    cacheReadInputTokenCost: 0.1 / 1_000_000,
+    cacheCreationInputTokenCost: 1.25 / 1_000_000,
   } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
   it("returns zeros for empty tests array", () => {
@@ -661,5 +663,34 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     // Should have meaningful savings (>10% for this scenario)
     expect(savingsPercent).toBeGreaterThan(10);
+  });
+
+  it("throws error when cache pricing is missing", () => {
+    const pricingWithoutCache = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCache)).toThrow(
+      "Cache pricing is required",
+    );
   });
 });
