@@ -109,7 +109,7 @@ interface Metadata {
   totalCost?: TotalCostInfo | null;
   cacheSimulation?: ReturnType<typeof simulateCacheSavings> | null;
   lmstudio?: LMStudioMetadata | null;
-  unitTestTotals?: UnitTestTotals;
+  unitTestTotals: UnitTestTotals;
 }
 
 export interface SingleTestResult {
