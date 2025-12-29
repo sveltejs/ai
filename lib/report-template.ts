@@ -350,16 +350,15 @@ function renderPricingSection(data: MultiTestResultData) {
   if (totalCost) {
     nonCachedCostHtml = `
       <div class="cost-section">
-        <h5 class="cost-section-title">💵 Actual Cost (No Caching)</h5>
-        <p class="cost-section-description">Cost when running tests without prompt caching enabled</p>
+        <h5 class="cost-section-title">💵 Cost</h5>
         <div class="cost-breakdown">
           <div class="cost-row">
-            <span class="cost-label">Input tokens:</span>
+            <span class="cost-label">Input:</span>
             <span class="cost-tokens">${totalCost.inputTokens.toLocaleString()}</span>
             <span class="cost-value">${formatCost(totalCost.inputCost)}</span>
           </div>
           <div class="cost-row">
-            <span class="cost-label">Output tokens:</span>
+            <span class="cost-label">Output:</span>
             <span class="cost-tokens">${totalCost.outputTokens.toLocaleString()}</span>
             <span class="cost-value">${formatCost(totalCost.outputCost)}</span>
           </div>
@@ -380,39 +379,37 @@ function renderPricingSection(data: MultiTestResultData) {
     if (hasCacheActivity && totalCost) {
       const savings = totalCost.totalCost - cacheSimulation.simulatedCostWithCache;
       const savingsPercent = totalCost.totalCost > 0 
-        ? ((savings / totalCost.totalCost) * 100).toFixed(1)
+        ? ((savings / totalCost.totalCost) * 100).toFixed(0)
         : "0";
-      const savingsClass = savings > 0 ? "savings-positive" : "savings-neutral";
+      const savingsClass = savings > 0 ? "savings-positive" : "savings-negative";
+      const savingsSign = savings >= 0 ? "+" : "";
 
       cachedCostHtml = `
         <div class="cost-section cached-section">
-          <h5 class="cost-section-title">📊 Simulated Cost (With Caching)</h5>
-          <p class="cost-section-description">Estimated cost if prompt caching were enabled using a growing prefix model</p>
+          <h5 class="cost-section-title">📊 Cost with prompt caching</h5>
           <div class="cost-breakdown">
             <div class="cost-row">
               <span class="cost-label">Cache reads:</span>
-              <span class="cost-tokens">${cacheSimulation.cacheHits.toLocaleString()} tokens</span>
-              <span class="cost-value cache-read">${formatMTokCost(pricing.cacheReadCostPerMTok)}/MTok</span>
+              <span class="cost-tokens">${cacheSimulation.cacheHits.toLocaleString()}</span>
+              <span class="cost-value dim">${formatMTokCost(pricing.cacheReadCostPerMTok)}/MTok</span>
             </div>
             <div class="cost-row">
               <span class="cost-label">Cache writes:</span>
-              <span class="cost-tokens">${cacheSimulation.cacheWriteTokens.toLocaleString()} tokens</span>
-              <span class="cost-value cache-write">${formatMTokCost(pricing.cacheCreationCostPerMTok)}/MTok</span>
+              <span class="cost-tokens">${cacheSimulation.cacheWriteTokens.toLocaleString()}</span>
+              <span class="cost-value dim">${formatMTokCost(pricing.cacheCreationCostPerMTok)}/MTok</span>
             </div>
             <div class="cost-row">
-              <span class="cost-label">Output tokens:</span>
+              <span class="cost-label">Output:</span>
               <span class="cost-tokens">${cacheSimulation.outputTokens.toLocaleString()}</span>
               <span class="cost-value">${formatCost(cacheSimulation.simulatedOutputCost)}</span>
             </div>
-            <div class="cost-row total simulated-total">
-              <span class="cost-label">Simulated Total:</span>
+            <div class="cost-row total">
+              <span class="cost-label">Total:</span>
               <span class="cost-tokens"></span>
-              <span class="cost-value">${formatCost(cacheSimulation.simulatedCostWithCache)}</span>
-            </div>
-            <div class="cost-row savings ${savingsClass}">
-              <span class="cost-label">Potential Savings:</span>
-              <span class="cost-tokens"></span>
-              <span class="cost-value">${formatCost(savings)} (${savingsPercent}%)</span>
+              <span class="cost-value-with-savings">
+                ${formatCost(cacheSimulation.simulatedCostWithCache)}
+                <span class="savings-badge ${savingsClass}">${savingsSign}${savingsPercent}%</span>
+              </span>
             </div>
           </div>
         </div>
@@ -474,7 +471,7 @@ function getPricingStyles() {
       gap: 8px;
       font-size: 12px;
       color: var(--text-muted);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
       flex-wrap: wrap;
@@ -504,15 +501,15 @@ function getPricingStyles() {
 
     .cost-sections-container {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
     }
 
     .cost-section {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px;
+      border-radius: 4px;
+      padding: 10px;
     }
 
     .cost-section.cached-section {
@@ -521,56 +518,31 @@ function getPricingStyles() {
     }
 
     .cost-section-title {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
-      margin: 0 0 4px 0;
+      margin: 0 0 8px 0;
       color: var(--text);
-    }
-
-    .cost-section-description {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin: 0 0 12px 0;
-      font-style: italic;
     }
 
     .cost-breakdown {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
 
     .cost-row {
       display: grid;
-      grid-template-columns: 140px 1fr auto;
-      gap: 8px;
+      grid-template-columns: 90px 1fr auto;
+      gap: 6px;
       align-items: center;
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .cost-row.total {
-      margin-top: 8px;
-      padding-top: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
       border-top: 1px solid var(--border);
       font-weight: 600;
-    }
-
-    .cost-row.simulated-total {
-      border-top-style: dashed;
-    }
-
-    .cost-row.savings {
-      margin-top: 4px;
-      font-style: italic;
-    }
-
-    .cost-row.savings.savings-positive .cost-value {
-      color: var(--success);
-      font-weight: 600;
-    }
-
-    .cost-row.savings.savings-neutral .cost-value {
-      color: var(--text-muted);
     }
 
     .cost-label {
@@ -584,28 +556,54 @@ function getPricingStyles() {
     .cost-tokens {
       font-family: 'JetBrains Mono', monospace;
       text-align: right;
+      font-size: 11px;
     }
 
     .cost-value {
       font-family: 'JetBrains Mono', monospace;
       font-weight: 500;
       text-align: right;
-      min-width: 80px;
+      min-width: 60px;
     }
 
-    .cost-value.cache-read,
-    .cost-value.cache-write {
-      font-size: 11px;
+    .cost-value.dim {
+      font-size: 10px;
       color: var(--text-muted);
+      font-weight: normal;
     }
 
     .cost-row.total .cost-value {
       color: var(--text);
-      font-size: 15px;
+      font-size: 13px;
     }
 
-    .cost-row.simulated-total .cost-value {
-      color: var(--mcp-enabled);
+    .cost-value-with-savings {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      text-align: right;
+      min-width: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .savings-badge {
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .savings-badge.savings-positive {
+      background: var(--success);
+      color: white;
+    }
+
+    .savings-badge.savings-negative {
+      background: var(--error);
+      color: white;
     }
 
     /* Validation styles */
