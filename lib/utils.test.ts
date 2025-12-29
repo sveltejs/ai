@@ -127,7 +127,7 @@ describe("calculateTotalCost", () => {
     });
   });
 
-  it("aggregates usage from multiple steps and tests without cache considerations", () => {
+  it("sums both inputTokens and cachedInputTokens for total input", () => {
     const tests: SingleTestResult[] = [
       {
         testName: "test1",
@@ -139,7 +139,7 @@ describe("calculateTotalCost", () => {
             usage: {
               inputTokens: 100,
               outputTokens: 50,
-              cachedInputTokens: 10, // Should be ignored
+              cachedInputTokens: 400, // Should be added to input
             },
           } as any,
           {
@@ -159,34 +159,33 @@ describe("calculateTotalCost", () => {
         steps: [
           {
             usage: {
-              inputTokens: 300,
+              inputTokens: 0, // All tokens reported as cached
               outputTokens: 150,
-              cachedInputTokens: 20, // Should be ignored
+              cachedInputTokens: 300,
             },
           } as any,
         ],
       },
     ];
 
-    // Total Input: 100 + 200 + 300 = 600
+    // Total Input: (100 + 400) + (200 + 0) + (0 + 300) = 1000
     // Total Output: 50 + 100 + 150 = 300
-    // Note: cachedInputTokens is ignored for non-cached cost calculation
 
     // Costs (per Token):
-    // Input: 600 * (1.0 / 1e6) = 0.0006
+    // Input: 1000 * (1.0 / 1e6) = 0.001
     // Output: 300 * (2.0 / 1e6) = 0.0006
-    // Total: 0.0006 + 0.0006 = 0.0012
+    // Total: 0.001 + 0.0006 = 0.0016
 
     const result = calculateTotalCost(tests, pricing);
 
-    expect(result.inputCost).toBe(0.0006);
-    expect(result.outputCost).toBe(0.0006);
-    expect(result.totalCost).toBeCloseTo(0.0012, 6);
-    expect(result.inputTokens).toBe(600);
+    expect(result.inputTokens).toBe(1000);
     expect(result.outputTokens).toBe(300);
+    expect(result.inputCost).toBe(0.001);
+    expect(result.outputCost).toBe(0.0006);
+    expect(result.totalCost).toBeCloseTo(0.0016, 6);
   });
 
-  it("ignores cachedInputTokens field entirely", () => {
+  it("handles case where all tokens are reported as cached", () => {
     const tests: SingleTestResult[] = [
       {
         testName: "test1",
@@ -196,9 +195,9 @@ describe("calculateTotalCost", () => {
         steps: [
           {
             usage: {
-              inputTokens: 1000,
+              inputTokens: 0,
               outputTokens: 500,
-              cachedInputTokens: 800, // Even with high cached count, all input charged at full rate
+              cachedInputTokens: 1000, // All input reported as cached
             },
           } as any,
         ],
@@ -207,10 +206,36 @@ describe("calculateTotalCost", () => {
 
     const result = calculateTotalCost(tests, pricing);
 
-    // All 1000 input tokens charged at full rate (no cache discount)
+    // All 1000 cached tokens should be charged at full input rate for non-cached calculation
+    expect(result.inputTokens).toBe(1000);
     expect(result.inputCost).toBe(0.001); // 1000 * 1e-6
     expect(result.outputCost).toBe(0.001); // 500 * 2e-6
     expect(result.totalCost).toBe(0.002);
+  });
+
+  it("handles missing cachedInputTokens field gracefully", () => {
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 500,
+              outputTokens: 250,
+              // cachedInputTokens not present
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    const result = calculateTotalCost(tests, pricing);
+
+    expect(result.inputTokens).toBe(500);
+    expect(result.outputTokens).toBe(250);
   });
 });
 
@@ -330,6 +355,33 @@ describe("simulateCacheSavings - growing prefix model", () => {
     expect(result.simulatedInputCost).toBeCloseTo(0.00125, 6);
     expect(result.simulatedOutputCost).toBeCloseTo(0.001, 6);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00225, 6);
+  });
+
+  it("includes cachedInputTokens in total input for simulation", () => {
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 0,
+              outputTokens: 500,
+              cachedInputTokens: 1000, // All tokens reported as cached
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    const result = simulateCacheSavings(tests, basicPricing);
+
+    // Should use 1000 total input tokens (0 + 1000 cached)
+    expect(result.cacheWriteTokens).toBe(1000);
+    expect(result.outputTokens).toBe(500);
+    expect(result.simulatedInputCost).toBeCloseTo(0.00125, 6); // 1000 * 1.25e-6
   });
 
   it("calculates savings for single test with multiple steps - growing prefix", () => {

@@ -57,8 +57,9 @@ export function extractResultWriteContent(steps: unknown[]) {
 
 /**
  * Calculate the total cost WITHOUT any caching.
- * This represents the actual cost when running tests without prompt caching enabled.
- * All input tokens are charged at the full input rate.
+ * This represents what the cost would be if prompt caching was NOT enabled.
+ * All input tokens (both inputTokens and cachedInputTokens from the API) 
+ * are charged at the full input rate.
  */
 export function calculateTotalCost(
   tests: SingleTestResult[],
@@ -69,8 +70,13 @@ export function calculateTotalCost(
 
   for (const test of tests) {
     for (const step of test.steps) {
-      totalInputTokens += step.usage.inputTokens;
-      totalOutputTokens += step.usage.outputTokens;
+      // Sum both inputTokens and cachedInputTokens to get total input tokens
+      // The API reports cached tokens separately, but for non-cached cost,
+      // we need to charge ALL input tokens at the full rate
+      const inputTokens = step.usage.inputTokens ?? 0;
+      const cachedTokens = step.usage.cachedInputTokens ?? 0;
+      totalInputTokens += inputTokens + cachedTokens;
+      totalOutputTokens += step.usage.outputTokens ?? 0;
     }
   }
 
@@ -165,37 +171,47 @@ export function simulateCacheSavings(
     const firstStep = test.steps[0];
     if (!firstStep) continue;
 
+    // Get total input tokens for first step (inputTokens + cachedInputTokens)
+    const firstStepInputTokens = 
+      (firstStep.usage.inputTokens ?? 0) + (firstStep.usage.cachedInputTokens ?? 0);
+    const firstStepOutputTokens = firstStep.usage.outputTokens ?? 0;
+
     // Create cache with first step's input tokens
-    const cache = new TokenCache(firstStep.usage.inputTokens, pricing);
-    totalCacheWriteTokens += firstStep.usage.inputTokens;
-    totalOutputTokens += firstStep.usage.outputTokens;
+    const cache = new TokenCache(firstStepInputTokens, pricing);
+    totalCacheWriteTokens += firstStepInputTokens;
+    totalOutputTokens += firstStepOutputTokens;
 
     // First step: pay cache creation rate for all input
-    simulatedInputCost += firstStep.usage.inputTokens * cacheWriteRate;
-    simulatedOutputCost += firstStep.usage.outputTokens * pricing.outputCostPerToken;
+    simulatedInputCost += firstStepInputTokens * cacheWriteRate;
+    simulatedOutputCost += firstStepOutputTokens * pricing.outputCostPerToken;
 
     // Add output tokens for first step (but no new input tokens yet)
-    cache.addMessage("step-0", 0, firstStep.usage.outputTokens);
+    cache.addMessage("step-0", 0, firstStepOutputTokens);
 
     // Process subsequent steps
     for (let i = 1; i < test.steps.length; i++) {
       const step = test.steps[i];
       if (!step) continue;
 
+      // Get total input tokens for this step
+      const stepInputTokens = 
+        (step.usage.inputTokens ?? 0) + (step.usage.cachedInputTokens ?? 0);
+      const stepOutputTokens = step.usage.outputTokens ?? 0;
+
       const stats = cache.getCacheStats();
       const cachedPortion = stats.currentContextTokens;
-      const newTokens = Math.max(0, step.usage.inputTokens - cachedPortion);
+      const newTokens = Math.max(0, stepInputTokens - cachedPortion);
 
       totalCacheHits += cachedPortion;
       totalCacheWriteTokens += newTokens;
-      totalOutputTokens += step.usage.outputTokens;
+      totalOutputTokens += stepOutputTokens;
 
       // Calculate cost for this step
       simulatedInputCost += cachedPortion * cacheReadRate;
       simulatedInputCost += newTokens * cacheWriteRate;
-      simulatedOutputCost += step.usage.outputTokens * pricing.outputCostPerToken;
+      simulatedOutputCost += stepOutputTokens * pricing.outputCostPerToken;
 
-      cache.addMessage(`step-${i}`, newTokens, step.usage.outputTokens);
+      cache.addMessage(`step-${i}`, newTokens, stepOutputTokens);
     }
   }
 
