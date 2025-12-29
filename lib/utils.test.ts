@@ -654,4 +654,64 @@ describe("simulateCacheSavings - growing prefix model", () => {
       "Cache pricing is required",
     );
   });
+
+  it("throws error when only cacheReadInputTokenCost is missing", () => {
+    const pricingWithoutCacheRead = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+      cacheCreationInputTokenCost: 1.25 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCacheRead)).toThrow(
+      "Cache pricing is required",
+    );
+  });
+
+  it("throws error when only cacheCreationInputTokenCost is missing", () => {
+    const pricingWithoutCacheCreation = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+      cacheReadInputTokenCost: 0.1 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCacheCreation)).toThrow(
+      "Cache pricing is required",
+    );
+  });
 });
