@@ -26,6 +26,7 @@ export async function getGatewayModelsAndPricing() {
 export async function validateAndConfirmPricing(
   models: string[],
   pricingMap: PricingMap,
+  savedPricingEnabled?: boolean,
 ): Promise<PricingResult> {
   const lookups = new Map<string, PricingLookup>();
 
@@ -56,7 +57,7 @@ export async function validateAndConfirmPricing(
 
     const usePricing = await confirm({
       message: "Enable cost calculation?",
-      initialValue: true,
+      initialValue: savedPricingEnabled ?? true,
     });
 
     if (isCancel(usePricing)) {
@@ -114,7 +115,10 @@ export async function validateAndConfirmPricing(
   }
 }
 
-export async function selectModelsFromGateway(pricingMap: PricingMap) {
+export async function selectModelsFromGateway(
+  pricingMap: PricingMap,
+  savedPricingEnabled?: boolean,
+) {
   const availableModels = await gateway.getAvailableModels();
 
   const models = await multiselect({
@@ -149,7 +153,7 @@ export async function selectModelsFromGateway(pricingMap: PricingMap) {
   }
 
   const selectedModels = models.filter((model) => model !== "custom");
-  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap);
+  const pricing = await validateAndConfirmPricing(selectedModels, pricingMap, savedPricingEnabled);
 
   return { selectedModels, pricing };
 }

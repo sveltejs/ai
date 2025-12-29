@@ -136,7 +136,7 @@ async function selectOptions() {
   if (providerConfig.type === "gateway") {
     const gatewayData = await getGatewayModelsAndPricing();
     pricingMap = gatewayData.pricingMap;
-    const result = await selectModelsFromGateway(pricingMap);
+    const result = await selectModelsFromGateway(pricingMap, savedSettings?.pricingEnabled);
     selectedModels = result.selectedModels;
     pricing = result.pricing;
   } else {
