@@ -4,10 +4,12 @@ import {
   getTimestampedFilename,
   calculateTotalCost,
   simulateCacheSavings,
+  buildAgentPrompt,
 } from "./utils.ts";
 import { TokenCache } from "./token-cache.ts";
 import { extractPricingFromGatewayModel } from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
+import type { TestDefinition } from "./test-discovery.ts";
 
 describe("sanitizeModelName", () => {
   it("replaces slashes with dashes", () => {
@@ -713,5 +715,97 @@ describe("simulateCacheSavings - growing prefix model", () => {
     expect(() => simulateCacheSavings(tests, pricingWithoutCacheCreation)).toThrow(
       "Cache pricing is required",
     );
+  });
+});
+
+describe("buildAgentPrompt", () => {
+  it("includes the prompt content", () => {
+    const testDef: TestDefinition = {
+      name: "counter",
+      directory: "/path/to/tests/counter",
+      referenceFile: "/path/to/tests/counter/Reference.svelte",
+      componentFile: "/path/to/tests/counter/Component.svelte",
+      testFile: "/path/to/tests/counter/test.ts",
+      promptFile: "/path/to/tests/counter/prompt.md",
+      prompt: "Create a counter component with increment and decrement buttons.",
+      testContent: 'import { expect, test } from "vitest";\ntest("renders", () => {});',
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.role).toBe("user");
+    expect(messages[0]?.content).toContain("Create a counter component with increment and decrement buttons.");
+  });
+
+  it("includes the test content in a code block", () => {
+    const testDef: TestDefinition = {
+      name: "hello-world",
+      directory: "/path/to/tests/hello-world",
+      referenceFile: "/path/to/tests/hello-world/Reference.svelte",
+      componentFile: "/path/to/tests/hello-world/Component.svelte",
+      testFile: "/path/to/tests/hello-world/test.ts",
+      promptFile: "/path/to/tests/hello-world/prompt.md",
+      prompt: "Create a hello world component.",
+      testContent: 'import { expect, test } from "vitest";\nimport { render } from "@testing-library/svelte";\n\ntest("displays hello world", () => {\n  expect(true).toBe(true);\n});',
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    const content = messages[0]?.content as string;
+
+    // Must include test suite section header
+    expect(content).toContain("## Test Suite");
+
+    // Must include the test content
+    expect(content).toContain('import { expect, test } from "vitest";');
+    expect(content).toContain('test("displays hello world", () => {');
+
+    // Must be in a code block
+    expect(content).toContain("```ts");
+    expect(content).toMatch(/```ts[\s\S]*import { expect, test } from "vitest";/);
+  });
+
+  it("includes instructions about ResultWrite tool", () => {
+    const testDef: TestDefinition = {
+      name: "simple",
+      directory: "/path/to/tests/simple",
+      referenceFile: "/path/to/tests/simple/Reference.svelte",
+      componentFile: "/path/to/tests/simple/Component.svelte",
+      testFile: "/path/to/tests/simple/test.ts",
+      promptFile: "/path/to/tests/simple/prompt.md",
+      prompt: "Create a simple component.",
+      testContent: "test content",
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    const content = messages[0]?.content as string;
+    expect(content).toContain("ResultWrite tool");
+    expect(content).toContain("IMPORTANT:");
+  });
+
+  it("returns ModelMessage array format", () => {
+    const testDef: TestDefinition = {
+      name: "test",
+      directory: "/path/to/tests/test",
+      referenceFile: "/path/to/tests/test/Reference.svelte",
+      componentFile: "/path/to/tests/test/Component.svelte",
+      testFile: "/path/to/tests/test/test.ts",
+      promptFile: "/path/to/tests/test/prompt.md",
+      prompt: "Test prompt",
+      testContent: "Test content",
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(Array.isArray(messages)).toBe(true);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toHaveProperty("role");
+    expect(messages[0]).toHaveProperty("content");
+    expect(messages[0]?.role).toBe("user");
+    expect(typeof messages[0]?.content).toBe("string");
   });
 });
