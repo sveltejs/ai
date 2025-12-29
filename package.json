@@ -8,7 +8,12 @@
     "postinstall": "patch-package",
     "update": "bun update --interactive",
     "verify-tests": "bun run verify-references.ts",
+    "generate-report": "bun run generate-report.ts",
+    "generate-index": "bun run generate-index.ts",
+    "build": "bun run generate-report && bun run generate-index",
     "prettier": "prettier --write .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "tsc": "tsc --noEmit",
     "vercel:link": "vercel link",
     "vercel:env:pull": "vercel env pull .env.local --yes"
@@ -17,6 +22,9 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@testing-library/jest-dom": "^6.6.3",
     "@types/bun": "^1.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "eslint": "^9.39.2",
     "jsdom": "^26.1.0",
     "patch-package": "^8.0.1",
     "prettier": "^3.7.4"
@@ -34,6 +42,7 @@
     "@testing-library/svelte": "^5.2.9",
     "@testing-library/user-event": "^14.6.1",
     "ai": "^5.0.108",
+    "p-retry": "^7.0.0",
     "vercel": "^49.1.2",
     "vitest": "^4.0.15",
     "zod": "^4.1.13"

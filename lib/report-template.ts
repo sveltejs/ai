@@ -1,5 +1,10 @@
 import type { TestVerificationResult } from "./output-test-runner.ts";
-import type { MultiTestResultData, SingleTestResult } from "./report.ts";
+import type { ValidationResult } from "./validator-runner.ts";
+import type {
+  MultiTestResultData,
+  SingleTestResult,
+  UnitTestTotals,
+} from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
 
@@ -98,6 +103,36 @@ function renderContentBlock(block: ContentBlock) {
   return "";
 }
 
+function renderValidationResult(
+  validation: ValidationResult | null | undefined,
+) {
+  if (!validation) {
+    return "";
+  }
+
+  const statusClass = validation.valid ? "passed" : "failed";
+  const statusIcon = validation.valid ? "✓" : "✗";
+  const statusText = validation.valid
+    ? "Validation passed"
+    : "Validation failed";
+
+  let errorsHtml = "";
+  if (validation.errors && validation.errors.length > 0) {
+    const errorItems = validation.errors
+      .map((err) => `<li class="validation-error-item">${escapeHtml(err)}</li>`)
+      .join("");
+    errorsHtml = `<ul class="validation-errors">${errorItems}</ul>`;
+  }
+
+  return `<div class="validation-result ${statusClass}">
+    <div class="validation-header">
+      <span class="validation-icon">${statusIcon}</span>
+      <span class="validation-text">${statusText}</span>
+    </div>
+    ${errorsHtml}
+  </div>`;
+}
+
 function renderVerificationResult(verification: TestVerificationResult | null) {
   if (!verification) {
     return `<div class="verification-result skipped">
@@ -106,9 +141,32 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
     </div>`;
   }
 
-  const statusClass = verification.passed ? "passed" : "failed";
-  const statusIcon = verification.passed ? "✓" : "✗";
-  const statusText = verification.passed ? "All tests passed" : "Tests failed";
+  const validationHtml = verification.validation
+    ? `<div class="validation-section">
+        <h5>Code Validation</h5>
+        ${renderValidationResult(verification.validation)}
+      </div>`
+    : "";
+
+  // When validation fails, report 0 passed regardless of actual results
+  const reportedPassed = verification.validationFailed ? 0 : verification.numPassed;
+
+  // Determine status class and icon based on validation and test results
+  const statusClass = verification.validationFailed
+    ? "failed"
+    : verification.passed
+      ? "passed"
+      : "failed";
+  const statusIcon = verification.validationFailed
+    ? "⊘"
+    : verification.passed
+      ? "✓"
+      : "✗";
+  const statusText = verification.validationFailed
+    ? `Validation failed (0/${verification.numTests} tests counted as passed)`
+    : verification.passed
+      ? "All tests passed"
+      : "Tests failed";
 
   let failedTestsHtml = "";
   if (verification.failedTests && verification.failedTests.length > 0) {
@@ -131,11 +189,12 @@ function renderVerificationResult(verification: TestVerificationResult | null) {
     errorHtml = `<div class="verification-error">Error: ${escapeHtml(verification.error)}</div>`;
   }
 
-  return `<div class="verification-result ${statusClass}">
+  return `${validationHtml}
+  <div class="verification-result ${statusClass}">
     <div class="verification-header">
       <span class="verification-icon">${statusIcon}</span>
       <span class="verification-text">${statusText}</span>
-      <span class="verification-stats">${verification.numPassed}/${verification.numTests} tests (${verification.duration}ms)</span>
+      <span class="verification-stats">${reportedPassed}/${verification.numTests} tests (${verification.duration}ms)</span>
     </div>
     ${errorHtml}
     ${failedTestsHtml}
@@ -197,6 +256,13 @@ function renderTestSection(test: SingleTestResult, index: number) {
 
   const componentId = `component-${test.testName.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
+  // When validation fails, report 0 passed regardless of actual results
+  const unitTestInfo = test.verification
+    ? test.verification.validationFailed
+      ? `0/${test.verification.numTests} unit tests (validation failed)`
+      : `${test.verification.numPassed}/${test.verification.numTests} unit tests`
+    : "";
+
   const resultWriteHtml = test.resultWriteContent
     ? `<div class="output-section">
         <div class="token-summary">
@@ -220,7 +286,7 @@ function renderTestSection(test: SingleTestResult, index: number) {
     <summary class="test-header">
       <span class="test-status ${verificationStatus}">${verificationIcon}</span>
       <span class="test-name">${escapeHtml(test.testName)}</span>
-      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens</span>
+      <span class="test-meta">${stepCount} steps · ${totalTokens.toLocaleString()} tokens${unitTestInfo ? ` · ${unitTestInfo}` : ""}</span>
     </summary>
     <div class="test-content">
       <details class="prompt-section">
@@ -245,7 +311,7 @@ function renderTestSection(test: SingleTestResult, index: number) {
 
 function renderPricingSection(data: MultiTestResultData) {
   const { metadata } = data;
-  const { pricing, totalCost, pricingKey } = metadata;
+  const { pricing, totalCost, cacheSimulation, pricingKey } = metadata;
 
   if (!pricing && !totalCost) {
     return "";
@@ -280,53 +346,75 @@ function renderPricingSection(data: MultiTestResultData) {
     `;
   }
 
-  let costBreakdownHtml = "";
+  let nonCachedCostHtml = "";
   if (totalCost) {
-    const cacheSimRow =
-      data.metadata.cacheSimulation &&
-      pricing?.cacheReadCostPerMTok !== undefined &&
-      (data.metadata.cacheSimulation.cacheHits > 0 ||
-        data.metadata.cacheSimulation.cacheWriteTokens > 0)
-        ? `
-        <div class="cost-row simulated">
-          <span class="cost-label">Estimated cost with prompt cache:</span>
-          <span class="cost-tokens">${data.metadata.cacheSimulation.cacheHits.toLocaleString()} reads + ${data.metadata.cacheSimulation.cacheWriteTokens.toLocaleString()} writes = ${(data.metadata.cacheSimulation.cacheHits + data.metadata.cacheSimulation.cacheWriteTokens).toLocaleString()} tokens</span>
-          <span class="cost-value">${formatCost(data.metadata.cacheSimulation.simulatedCostWithCache)}</span>
+    nonCachedCostHtml = `
+      <div class="cost-section">
+        <h5 class="cost-section-title">💵 Cost</h5>
+        <div class="cost-breakdown">
+          <div class="cost-row">
+            <span class="cost-label">Input:</span>
+            <span class="cost-tokens">${totalCost.inputTokens.toLocaleString()}</span>
+            <span class="cost-value">${formatCost(totalCost.inputCost)}</span>
+          </div>
+          <div class="cost-row">
+            <span class="cost-label">Output:</span>
+            <span class="cost-tokens">${totalCost.outputTokens.toLocaleString()}</span>
+            <span class="cost-value">${formatCost(totalCost.outputCost)}</span>
+          </div>
+          <div class="cost-row total">
+            <span class="cost-label">Total:</span>
+            <span class="cost-tokens"></span>
+            <span class="cost-value">${formatCost(totalCost.totalCost)}</span>
+          </div>
         </div>
-        `
-        : "";
-
-    costBreakdownHtml = `
-      <div class="cost-breakdown">
-        <div class="cost-row">
-          <span class="cost-label">Input tokens:</span>
-          <span class="cost-tokens">${totalCost.inputTokens.toLocaleString()}</span>
-          <span class="cost-value">${formatCost(totalCost.inputCost)}</span>
-        </div>
-        <div class="cost-row">
-          <span class="cost-label">Output tokens:</span>
-          <span class="cost-tokens">${totalCost.outputTokens.toLocaleString()}</span>
-          <span class="cost-value">${formatCost(totalCost.outputCost)}</span>
-        </div>
-        ${
-          totalCost.cachedInputTokens > 0
-            ? `
-        <div class="cost-row cached">
-          <span class="cost-label">Cached tokens (from usage):</span>
-          <span class="cost-tokens">${totalCost.cachedInputTokens.toLocaleString()} ⚡</span>
-          <span class="cost-value">-</span>
-        </div>
-        `
-            : ""
-        }
-        <div class="cost-row total">
-          <span class="cost-label">Total Cost:</span>
-          <span class="cost-tokens"></span>
-          <span class="cost-value">${formatCost(totalCost.totalCost)}</span>
-        </div>
-        ${cacheSimRow}
       </div>
     `;
+  }
+
+  let cachedCostHtml = "";
+  if (cacheSimulation && pricing?.cacheReadCostPerMTok !== undefined && pricing?.cacheCreationCostPerMTok !== undefined) {
+    const hasCacheActivity = cacheSimulation.cacheHits > 0 || cacheSimulation.cacheWriteTokens > 0;
+    
+    if (hasCacheActivity && totalCost) {
+      const savings = totalCost.totalCost - cacheSimulation.simulatedCostWithCache;
+      const savingsPercent = totalCost.totalCost > 0 
+        ? ((savings / totalCost.totalCost) * 100).toFixed(0)
+        : "0";
+      const savingsClass = savings > 0 ? "savings-positive" : "savings-negative";
+      const savingsSign = savings >= 0 ? "+" : "";
+
+      cachedCostHtml = `
+        <div class="cost-section cached-section">
+          <h5 class="cost-section-title">📊 Cost with prompt caching</h5>
+          <div class="cost-breakdown">
+            <div class="cost-row">
+              <span class="cost-label">Cache reads:</span>
+              <span class="cost-tokens">${cacheSimulation.cacheHits.toLocaleString()}</span>
+              <span class="cost-value dim">${formatMTokCost(pricing.cacheReadCostPerMTok)}/MTok</span>
+            </div>
+            <div class="cost-row">
+              <span class="cost-label">Cache writes:</span>
+              <span class="cost-tokens">${cacheSimulation.cacheWriteTokens.toLocaleString()}</span>
+              <span class="cost-value dim">${formatMTokCost(pricing.cacheCreationCostPerMTok)}/MTok</span>
+            </div>
+            <div class="cost-row">
+              <span class="cost-label">Output:</span>
+              <span class="cost-tokens">${cacheSimulation.outputTokens.toLocaleString()}</span>
+              <span class="cost-value">${formatCost(cacheSimulation.simulatedOutputCost)}</span>
+            </div>
+            <div class="cost-row total">
+              <span class="cost-label">Total:</span>
+              <span class="cost-tokens"></span>
+              <span class="cost-value-with-savings">
+                ${formatCost(cacheSimulation.simulatedCostWithCache)}
+                <span class="savings-badge ${savingsClass}">${savingsSign}${savingsPercent}%</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
   }
 
   return `
@@ -336,9 +424,19 @@ function renderPricingSection(data: MultiTestResultData) {
         <span class="pricing-title">Cost Summary</span>
       </div>
       ${pricingInfoHtml}
-      ${costBreakdownHtml}
+      <div class="cost-sections-container">
+        ${nonCachedCostHtml}
+        ${cachedCostHtml}
+      </div>
     </div>
   `;
+}
+
+function getScoreClass(score: number): string {
+  if (score >= 90) return "excellent";
+  if (score >= 70) return "good";
+  if (score >= 50) return "fair";
+  return "poor";
 }
 
 function getPricingStyles() {
@@ -401,35 +499,48 @@ function getPricingStyles() {
       color: var(--border);
     }
 
+    .cost-sections-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .cost-section {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+    }
+
+    .cost-section.cached-section {
+      border-color: var(--mcp-enabled);
+      border-style: dashed;
+    }
+
+    .cost-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: var(--text);
+    }
+
     .cost-breakdown {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
 
     .cost-row {
       display: grid;
-      grid-template-columns: 200px 1fr auto;
-      gap: 8px;
+      grid-template-columns: 90px 1fr auto;
+      gap: 6px;
       align-items: center;
-      font-size: 13px;
-    }
-
-    .cost-row.cached {
-      color: var(--text-muted);
-    }
-
-    .cost-row.simulated {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px dashed var(--border);
-      color: var(--text-muted);
-      font-style: italic;
+      font-size: 12px;
     }
 
     .cost-row.total {
-      margin-top: 8px;
-      padding-top: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
       border-top: 1px solid var(--border);
       font-weight: 600;
     }
@@ -445,22 +556,167 @@ function getPricingStyles() {
     .cost-tokens {
       font-family: 'JetBrains Mono', monospace;
       text-align: right;
+      font-size: 11px;
     }
 
     .cost-value {
       font-family: 'JetBrains Mono', monospace;
       font-weight: 500;
       text-align: right;
-      min-width: 80px;
+      min-width: 60px;
+    }
+
+    .cost-value.dim {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: normal;
     }
 
     .cost-row.total .cost-value {
-      color: var(--success);
-      font-size: 15px;
+      color: var(--text);
+      font-size: 13px;
     }
 
-    .cost-row.simulated .cost-value {
-      color: var(--mcp-enabled);
+    .cost-value-with-savings {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      text-align: right;
+      min-width: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .savings-badge {
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .savings-badge.savings-positive {
+      background: var(--success);
+      color: white;
+    }
+
+    .savings-badge.savings-negative {
+      background: var(--error);
+      color: white;
+    }
+
+    /* Validation styles */
+    .validation-section {
+      margin-bottom: 12px;
+    }
+
+    .validation-section h5 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .validation-result {
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .validation-result.passed {
+      background: var(--passed-bg);
+      border-color: var(--passed-border);
+    }
+
+    .validation-result.failed {
+      background: var(--failed-bg);
+      border-color: var(--failed-border);
+    }
+
+    .validation-result .validation-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .validation-result .validation-icon {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .validation-result.passed .validation-icon { color: var(--success); }
+    .validation-result.failed .validation-icon { color: var(--error); }
+
+    .validation-result .validation-text {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .validation-errors {
+      margin-top: 8px;
+      padding-left: 20px;
+      list-style: disc;
+    }
+
+    .validation-error-item {
+      color: var(--error);
+      font-size: 12px;
+      margin: 4px 0;
+    }
+
+    /* Unit test inline styles */
+    .unit-tests-inline {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    /* Score badge styles */
+    .score-badge {
+      font-size: 18px;
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .score-badge.excellent {
+      background: var(--success);
+      color: white;
+    }
+
+    .score-badge.good {
+      background: #2ea043;
+      color: white;
+    }
+
+    .score-badge.fair {
+      background: var(--warning);
+      color: white;
+    }
+
+    .score-badge.poor {
+      background: var(--error);
+      color: white;
+    }
+
+    /* Summary bar improvements */
+    .summary-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .summary-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
   `;
 }
@@ -473,6 +729,8 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
     (t) => t.verification && !t.verification.passed,
   ).length;
   const skippedTests = data.tests.filter((t) => !t.verification).length;
+
+  const unitTestTotals = metadata.unitTestTotals;
 
   const totalTokens = data.tests.reduce(
     (sum, test) =>
@@ -498,12 +756,7 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
     ? `<span class="cost-badge">${formatCost(metadata.totalCost.totalCost)}</span>`
     : "";
 
-  const overallStatus =
-    failedTests === 0 && skippedTests === 0
-      ? "all-passed"
-      : failedTests > 0
-        ? "has-failures"
-        : "has-skipped";
+  const scoreClass = getScoreClass(unitTestTotals.score);
 
   const testsHtml = data.tests
     .map((test, index) => renderTestSection(test, index))
@@ -544,9 +797,13 @@ export function generateMultiTestHtml(data: MultiTestResultData) {
       <button class="theme-toggle" onclick="toggleTheme()">◐</button>
     </div>
     <div class="summary-bar">
-      <div class="summary-item passed">✓ ${passedTests} passed</div>
-      <div class="summary-item failed">✗ ${failedTests} failed</div>
-      ${skippedTests > 0 ? `<div class="summary-item skipped">⊘ ${skippedTests} skipped</div>` : ""}
+      <span class="score-badge ${scoreClass}" title="Score: ${unitTestTotals.passed} passed / ${unitTestTotals.total} total unit tests">${unitTestTotals.score}%</span>
+      <div class="summary-group">
+        <div class="summary-item passed">✓ ${passedTests} passed</div>
+        <div class="summary-item failed">✗ ${failedTests} failed</div>
+        ${skippedTests > 0 ? `<div class="summary-item skipped">⊘ ${skippedTests} skipped</div>` : ""}
+        <span class="unit-tests-inline">(${unitTestTotals.passed}/${unitTestTotals.total} unit tests)</span>
+      </div>
     </div>
   </header>
 

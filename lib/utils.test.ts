@@ -4,10 +4,12 @@ import {
   getTimestampedFilename,
   calculateTotalCost,
   simulateCacheSavings,
+  buildAgentPrompt,
 } from "./utils.ts";
 import { TokenCache } from "./token-cache.ts";
 import { extractPricingFromGatewayModel } from "./pricing.ts";
 import type { SingleTestResult } from "./report.ts";
+import type { TestDefinition } from "./test-discovery.ts";
 
 describe("sanitizeModelName", () => {
   it("replaces slashes with dashes", () => {
@@ -122,11 +124,10 @@ describe("calculateTotalCost", () => {
       totalCost: 0,
       inputTokens: 0,
       outputTokens: 0,
-      cachedInputTokens: 0,
     });
   });
 
-  it("aggregates usage from multiple steps and tests", () => {
+  it("sums both inputTokens and cachedInputTokens for total input", () => {
     const tests: SingleTestResult[] = [
       {
         testName: "test1",
@@ -138,7 +139,7 @@ describe("calculateTotalCost", () => {
             usage: {
               inputTokens: 100,
               outputTokens: 50,
-              cachedInputTokens: 10,
+              cachedInputTokens: 400, // Should be added to input
             },
           } as any,
           {
@@ -158,34 +159,83 @@ describe("calculateTotalCost", () => {
         steps: [
           {
             usage: {
-              inputTokens: 300,
+              inputTokens: 0, // All tokens reported as cached
               outputTokens: 150,
-              cachedInputTokens: 20,
+              cachedInputTokens: 300,
             },
           } as any,
         ],
       },
     ];
 
-    // Total Input: 100 + 200 + 300 = 600
+    // Total Input: (100 + 400) + (200 + 0) + (0 + 300) = 1000
     // Total Output: 50 + 100 + 150 = 300
-    // Total Cached: 10 + 0 + 20 = 30
 
-    // Costs (per Token) - calculateCost bills all input at full rate:
-    // Input: 600 * (1.0 / 1e6) = 0.0006
+    // Costs (per Token):
+    // Input: 1000 * (1.0 / 1e6) = 0.001
     // Output: 300 * (2.0 / 1e6) = 0.0006
-    // Total: 0.0006 + 0.0006 = 0.0012
+    // Total: 0.001 + 0.0006 = 0.0016
 
     const result = calculateTotalCost(tests, pricing);
 
-    expect(result).toEqual({
-      inputCost: 0.0006,
-      outputCost: 0.0006,
-      totalCost: 0.0012,
-      inputTokens: 600,
-      outputTokens: 300,
-      cachedInputTokens: 30,
-    });
+    expect(result.inputTokens).toBe(1000);
+    expect(result.outputTokens).toBe(300);
+    expect(result.inputCost).toBe(0.001);
+    expect(result.outputCost).toBe(0.0006);
+    expect(result.totalCost).toBeCloseTo(0.0016, 6);
+  });
+
+  it("handles case where all tokens are reported as cached", () => {
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 0,
+              outputTokens: 500,
+              cachedInputTokens: 1000, // All input reported as cached
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    const result = calculateTotalCost(tests, pricing);
+
+    // All 1000 cached tokens should be charged at full input rate for non-cached calculation
+    expect(result.inputTokens).toBe(1000);
+    expect(result.inputCost).toBe(0.001); // 1000 * 1e-6
+    expect(result.outputCost).toBe(0.001); // 500 * 2e-6
+    expect(result.totalCost).toBe(0.002);
+  });
+
+  it("handles missing cachedInputTokens field gracefully", () => {
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 500,
+              outputTokens: 250,
+              // cachedInputTokens not present
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    const result = calculateTotalCost(tests, pricing);
+
+    expect(result.inputTokens).toBe(500);
+    expect(result.outputTokens).toBe(250);
   });
 });
 
@@ -239,42 +289,6 @@ describe("TokenCache", () => {
     expect(stats.currentContextTokens).toBe(180); // 100 + 50 + 30
   });
 
-  it("calculates cost with pricing", () => {
-    const cache = new TokenCache(100, pricing);
-
-    cache.addMessage("msg1", 50, 200);
-    cache.addMessage("msg2", 100, 300);
-
-    const cost = cache.calculateSimulatedCost();
-
-    // totalCachedTokens = 100 + 150 = 250 (tokens read from cache across calls)
-    // currentTokens = 250 (all tokens written to cache)
-    // totalOutputTokens = 200 + 300 = 500
-
-    // cacheReadCost = 250 * 0.1e-6 = 0.000025
-    // cacheWriteCost = 250 * 1.25e-6 = 0.0003125 (cache write rate is 1.25x)
-    // outputCost = 500 * 2e-6 = 0.001
-    // simulatedCost = 0.000025 + 0.0003125 + 0.001 = 0.0013375
-
-    expect(cost.cacheReadCost).toBeCloseTo(0.000025, 6);
-    expect(cost.cacheWriteCost).toBeCloseTo(0.0003125, 6);
-    expect(cost.outputCost).toBeCloseTo(0.001, 6);
-    expect(cost.simulatedCost).toBeCloseTo(0.0013375, 6);
-  });
-
-  it("calculates zero cost without pricing", () => {
-    const cache = new TokenCache(100);
-
-    cache.addMessage("msg1", 50, 200);
-
-    const cost = cache.calculateSimulatedCost();
-
-    expect(cost.cacheReadCost).toBe(0);
-    expect(cost.cacheWriteCost).toBe(0);
-    expect(cost.outputCost).toBe(0);
-    expect(cost.simulatedCost).toBe(0);
-  });
-
   it("handles zero tokens", () => {
     const cache = new TokenCache(0, pricing);
     const stats = cache.getCacheStats();
@@ -282,19 +296,18 @@ describe("TokenCache", () => {
     expect(stats.totalCachedTokens).toBe(0);
     expect(stats.currentContextTokens).toBe(0);
     expect(stats.messageCount).toBe(0);
-
-    const cost = cache.calculateSimulatedCost();
-    expect(cost.simulatedCost).toBe(0);
   });
 });
 
 describe("simulateCacheSavings - growing prefix model", () => {
-  // Default pricing: input=$1/MTok, output=$2/MTok
-  // Default cache read: 10% of input = $0.10/MTok
-  // Default cache write: 125% of input = $1.25/MTok
+  // Pricing: input=$1/MTok, output=$2/MTok
+  // Cache read: 10% of input = $0.10/MTok
+  // Cache write: 125% of input = $1.25/MTok
   const basicPricing = {
     inputCostPerToken: 1.0 / 1_000_000,
     outputCostPerToken: 2.0 / 1_000_000,
+    cacheReadInputTokenCost: 0.1 / 1_000_000,
+    cacheCreationInputTokenCost: 1.25 / 1_000_000,
   } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
 
   it("returns zeros for empty tests array", () => {
@@ -303,8 +316,11 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     expect(result).toEqual({
       simulatedCostWithCache: 0,
+      simulatedInputCost: 0,
+      simulatedOutputCost: 0,
       cacheHits: 0,
       cacheWriteTokens: 0,
+      outputTokens: 0,
     });
   });
 
@@ -330,10 +346,42 @@ describe("simulateCacheSavings - growing prefix model", () => {
     const result = simulateCacheSavings(tests, basicPricing);
 
     // Step 1: 1000 input tokens at cache write rate (1.25/MTok) + 500 output at $2/MTok
-    // Simulated cost = 1000 * 1.25e-6 + 500 * 2e-6 = 0.00125 + 0.001 = 0.00225
+    // Simulated input cost = 1000 * 1.25e-6 = 0.00125
+    // Simulated output cost = 500 * 2e-6 = 0.001
+    // Simulated total = 0.00125 + 0.001 = 0.00225
     expect(result.cacheHits).toBe(0);
     expect(result.cacheWriteTokens).toBe(1000);
+    expect(result.outputTokens).toBe(500);
+    expect(result.simulatedInputCost).toBeCloseTo(0.00125, 6);
+    expect(result.simulatedOutputCost).toBeCloseTo(0.001, 6);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00225, 6);
+  });
+
+  it("includes cachedInputTokens in total input for simulation", () => {
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 0,
+              outputTokens: 500,
+              cachedInputTokens: 1000, // All tokens reported as cached
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    const result = simulateCacheSavings(tests, basicPricing);
+
+    // Should use 1000 total input tokens (0 + 1000 cached)
+    expect(result.cacheWriteTokens).toBe(1000);
+    expect(result.outputTokens).toBe(500);
+    expect(result.simulatedInputCost).toBeCloseTo(0.00125, 6); // 1000 * 1.25e-6
   });
 
   it("calculates savings for single test with multiple steps - growing prefix", () => {
@@ -373,15 +421,21 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     // Growing prefix model:
     // Step 1: 1000 tokens → write all to cache
-    //   Cost: 1000 * 1.25e-6 + 200 * 2e-6 = 0.00125 + 0.0004 = 0.00165
+    //   Input cost: 1000 * 1.25e-6 = 0.00125
+    //   Output cost: 200 * 2e-6 = 0.0004
     // Step 2: 1500 tokens → 1000 cached (read), 500 new (write)
-    //   Cost: 1000 * 0.1e-6 + 500 * 1.25e-6 + 300 * 2e-6 = 0.0001 + 0.000625 + 0.0006 = 0.001325
+    //   Input cost: 1000 * 0.1e-6 + 500 * 1.25e-6 = 0.0001 + 0.000625 = 0.000725
+    //   Output cost: 300 * 2e-6 = 0.0006
     // Step 3: 2000 tokens → 1500 cached (read), 500 new (write)
-    //   Cost: 1500 * 0.1e-6 + 500 * 1.25e-6 + 400 * 2e-6 = 0.00015 + 0.000625 + 0.0008 = 0.001575
-    // Total simulated: 0.00165 + 0.001325 + 0.001575 = 0.00455
+    //   Input cost: 1500 * 0.1e-6 + 500 * 1.25e-6 = 0.00015 + 0.000625 = 0.000775
+    //   Output cost: 400 * 2e-6 = 0.0008
+    // Total input: 0.00125 + 0.000725 + 0.000775 = 0.00275
+    // Total output: 0.0004 + 0.0006 + 0.0008 = 0.0018
+    // Total simulated: 0.00275 + 0.0018 = 0.00455
 
     expect(result.cacheHits).toBe(1000 + 1500); // 1000 from step 2 + 1500 from step 3
     expect(result.cacheWriteTokens).toBe(1000 + 500 + 500); // 1000 step1 + 500 step2 + 500 step3
+    expect(result.outputTokens).toBe(200 + 300 + 400);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.00455, 6);
   });
 
@@ -457,6 +511,7 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     expect(result.cacheHits).toBe(2000);
     expect(result.cacheWriteTokens).toBe(2000);
+    expect(result.outputTokens).toBe(100 + 100 + 200 + 200 + 200);
 
     // Calculate expected cost manually:
     // Test 1 Step 1: 500 * 1.25e-6 + 100 * 2e-6 = 0.000625 + 0.0002 = 0.000825
@@ -500,6 +555,7 @@ describe("simulateCacheSavings - growing prefix model", () => {
     // Only test2 should be counted
     expect(result.cacheHits).toBe(0);
     expect(result.cacheWriteTokens).toBe(1000);
+    expect(result.outputTokens).toBe(500);
   });
 
   it("uses custom cache pricing when provided", () => {
@@ -545,6 +601,7 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     expect(result.cacheHits).toBe(1000);
     expect(result.cacheWriteTokens).toBe(1000 + 500);
+    expect(result.outputTokens).toBe(500 + 500);
     expect(result.simulatedCostWithCache).toBeCloseTo(0.0043, 6);
   });
 
@@ -608,6 +665,7 @@ describe("simulateCacheSavings - growing prefix model", () => {
     expect(result.simulatedCostWithCache).toBe(0);
     expect(result.cacheHits).toBe(0);
     expect(result.cacheWriteTokens).toBe(0);
+    expect(result.outputTokens).toBe(0);
   });
 
   it("compares favorably to actual cost for multi-step tests", () => {
@@ -661,5 +719,186 @@ describe("simulateCacheSavings - growing prefix model", () => {
 
     // Should have meaningful savings (>10% for this scenario)
     expect(savingsPercent).toBeGreaterThan(10);
+  });
+
+  it("throws error when cache pricing is missing", () => {
+    const pricingWithoutCache = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCache)).toThrow(
+      "Cache pricing is required",
+    );
+  });
+
+  it("throws error when only cacheReadInputTokenCost is missing", () => {
+    const pricingWithoutCacheRead = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+      cacheCreationInputTokenCost: 1.25 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCacheRead)).toThrow(
+      "Cache pricing is required",
+    );
+  });
+
+  it("throws error when only cacheCreationInputTokenCost is missing", () => {
+    const pricingWithoutCacheCreation = {
+      inputCostPerToken: 1.0 / 1_000_000,
+      outputCostPerToken: 2.0 / 1_000_000,
+      cacheReadInputTokenCost: 0.1 / 1_000_000,
+    } satisfies NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>;
+
+    const tests: SingleTestResult[] = [
+      {
+        testName: "test1",
+        prompt: "p1",
+        resultWriteContent: null,
+        verification: {} as any,
+        steps: [
+          {
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 0,
+            },
+          } as any,
+        ],
+      },
+    ];
+
+    expect(() => simulateCacheSavings(tests, pricingWithoutCacheCreation)).toThrow(
+      "Cache pricing is required",
+    );
+  });
+});
+
+describe("buildAgentPrompt", () => {
+  it("includes the prompt content", () => {
+    const testDef: TestDefinition = {
+      name: "counter",
+      directory: "/path/to/tests/counter",
+      referenceFile: "/path/to/tests/counter/Reference.svelte",
+      componentFile: "/path/to/tests/counter/Component.svelte",
+      testFile: "/path/to/tests/counter/test.ts",
+      promptFile: "/path/to/tests/counter/prompt.md",
+      prompt: "Create a counter component with increment and decrement buttons.",
+      testContent: 'import { expect, test } from "vitest";\ntest("renders", () => {});',
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.role).toBe("user");
+    expect(messages[0]?.content).toContain("Create a counter component with increment and decrement buttons.");
+  });
+
+  it("includes the test content in a code block", () => {
+    const testDef: TestDefinition = {
+      name: "hello-world",
+      directory: "/path/to/tests/hello-world",
+      referenceFile: "/path/to/tests/hello-world/Reference.svelte",
+      componentFile: "/path/to/tests/hello-world/Component.svelte",
+      testFile: "/path/to/tests/hello-world/test.ts",
+      promptFile: "/path/to/tests/hello-world/prompt.md",
+      prompt: "Create a hello world component.",
+      testContent: 'import { expect, test } from "vitest";\nimport { render } from "@testing-library/svelte";\n\ntest("displays hello world", () => {\n  expect(true).toBe(true);\n});',
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    const content = messages[0]?.content as string;
+
+    // Must include test suite section header
+    expect(content).toContain("## Test Suite");
+
+    // Must include the test content
+    expect(content).toContain('import { expect, test } from "vitest";');
+    expect(content).toContain('test("displays hello world", () => {');
+
+    // Must be in a code block
+    expect(content).toContain("\`\`\`ts");
+    expect(content).toMatch(/\`\`\`ts[\s\S]*import { expect, test } from "vitest";/);
+  });
+
+  it("includes instructions about ResultWrite tool", () => {
+    const testDef: TestDefinition = {
+      name: "simple",
+      directory: "/path/to/tests/simple",
+      referenceFile: "/path/to/tests/simple/Reference.svelte",
+      componentFile: "/path/to/tests/simple/Component.svelte",
+      testFile: "/path/to/tests/simple/test.ts",
+      promptFile: "/path/to/tests/simple/prompt.md",
+      prompt: "Create a simple component.",
+      testContent: "test content",
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(messages).toHaveLength(1);
+    const content = messages[0]?.content as string;
+    expect(content).toContain("ResultWrite tool");
+    expect(content).toContain("IMPORTANT:");
+  });
+
+  it("returns ModelMessage array format", () => {
+    const testDef: TestDefinition = {
+      name: "test",
+      directory: "/path/to/tests/test",
+      referenceFile: "/path/to/tests/test/Reference.svelte",
+      componentFile: "/path/to/tests/test/Component.svelte",
+      testFile: "/path/to/tests/test/test.ts",
+      promptFile: "/path/to/tests/test/prompt.md",
+      prompt: "Test prompt",
+      testContent: "Test content",
+    };
+
+    const messages = buildAgentPrompt(testDef);
+
+    expect(Array.isArray(messages)).toBe(true);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toHaveProperty("role");
+    expect(messages[0]).toHaveProperty("content");
+    expect(messages[0]?.role).toBe("user");
+    expect(typeof messages[0]?.content).toBe("string");
   });
 });

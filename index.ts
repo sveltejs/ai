@@ -1,13 +1,18 @@
 import { Experimental_Agent as Agent, hasToolCall, stepCountIs } from "ai";
 import { experimental_createMCPClient as createMCPClient } from "./node_modules/@ai-sdk/mcp/dist/index.mjs";
 import { Experimental_StdioMCPTransport as StdioMCPTransport } from "./node_modules/@ai-sdk/mcp/dist/mcp-stdio/index.mjs";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { generateReport, type SingleTestResult } from "./lib/report.ts";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import {
+  generateReport,
+  calculateUnitTestTotals,
+  type SingleTestResult,
+} from "./lib/report.ts";
 import {
   getTimestampedFilename,
   isHttpUrl,
   extractResultWriteContent,
   calculateTotalCost,
+  withRetry,
   buildAgentPrompt,
   simulateCacheSavings,
 } from "./lib/utils.ts";
@@ -19,7 +24,14 @@ import {
   runTestVerification,
 } from "./lib/output-test-runner.ts";
 import { resultWriteTool, testComponentTool } from "./lib/tools/index.ts";
-import { getModelPricingDisplay, formatCost, formatMTokCost } from "./lib/pricing.ts";
+import {
+  getModelPricingDisplay,
+  formatCost,
+  formatMTokCost,
+  buildPricingMap,
+  lookupPricingFromMap,
+  formatFullPricingDisplay,
+} from "./lib/pricing.ts";
 import {
   gateway,
   getGatewayModelsAndPricing,
@@ -36,17 +48,47 @@ import {
   type LMStudioConfig,
 } from "./lib/providers/lmstudio.ts";
 import type { LanguageModel } from "ai";
-import { intro, isCancel, cancel, select, confirm, text } from "@clack/prompts";
-import { buildPricingMap } from "./lib/pricing.ts";
+import { intro, isCancel, cancel, select, confirm, text, multiselect, note } from "@clack/prompts";
 
 type ProviderType = "gateway" | "lmstudio";
+
+const SETTINGS_FILE = ".ai-settings.json";
+
+interface SavedSettings {
+  models: string[];
+  mcpIntegration: "none" | "http" | "stdio";
+  mcpServerUrl?: string;
+  testingTool: boolean;
+  pricingEnabled: boolean;
+  provider?: ProviderType;
+}
+
+function loadSettings(): SavedSettings | null {
+  try {
+    if (existsSync(SETTINGS_FILE)) {
+      const content = readFileSync(SETTINGS_FILE, "utf-8");
+      return JSON.parse(content) as SavedSettings;
+    }
+  } catch {
+    console.warn("Could not load saved settings, using defaults");
+  }
+  return null;
+}
+
+function saveSettings(settings: SavedSettings): void {
+  try {
+    writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch {
+    console.warn("Could not save settings");
+  }
+}
 
 interface ProviderConfig {
   type: ProviderType;
   lmstudio?: LMStudioConfig;
 }
 
-async function selectProvider(): Promise<ProviderConfig> {
+async function selectProvider(savedProvider?: ProviderType): Promise<ProviderConfig> {
   const provider = await select({
     message: "Select model provider",
     options: [
@@ -61,7 +103,7 @@ async function selectProvider(): Promise<ProviderConfig> {
         hint: "Local models via LM Studio",
       },
     ],
-    initialValue: "gateway",
+    initialValue: savedProvider ?? "gateway",
   });
 
   if (isCancel(provider)) {
@@ -80,7 +122,12 @@ async function selectProvider(): Promise<ProviderConfig> {
 async function selectOptions() {
   intro("🚀 Svelte AI Bench");
 
-  const providerConfig = await selectProvider();
+  const savedSettings = loadSettings();
+  if (savedSettings) {
+    note("Loaded previous settings as defaults", "Saved Settings");
+  }
+
+  const providerConfig = await selectProvider(savedSettings?.provider);
 
   let pricingMap: PricingMap;
   let selectedModels: string[];
@@ -103,27 +150,43 @@ async function selectOptions() {
     };
   }
 
-  const mcp_integration = await select({
+  const savedMcpIntegration = savedSettings?.mcpIntegration ?? "none";
+
+  const mcpIntegration = await select({
     message: "Which MCP integration to use?",
     options: [
       { value: "none", label: "No MCP Integration" },
       { value: "http", label: "MCP over HTTP" },
       { value: "stdio", label: "MCP over StdIO" },
     ],
-    initialValue: "http",
+    initialValue: savedMcpIntegration,
   });
 
-  if (isCancel(mcp_integration)) {
+  if (isCancel(mcpIntegration)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
 
   let mcp: string | undefined = undefined;
+  let mcpIntegrationType: "none" | "http" | "stdio" = "none";
 
-  if (mcp_integration !== "none") {
+  if (mcpIntegration !== "none") {
+    mcpIntegrationType = mcpIntegration as "http" | "stdio";
+
+    const savedMcpUrl = savedSettings?.mcpServerUrl;
+    const defaultMcpUrl =
+      mcpIntegration === "http"
+        ? "https://mcp.svelte.dev/mcp"
+        : "npx -y @sveltejs/mcp";
+
+    const hasSavedCustomUrl =
+      !!savedMcpUrl &&
+      savedSettings?.mcpIntegration === mcpIntegration &&
+      savedMcpUrl !== defaultMcpUrl;
+
     const custom = await confirm({
       message: "Do you want to provide a custom MCP server/command?",
-      initialValue: false,
+      initialValue: hasSavedCustomUrl ?? false,
     });
 
     if (isCancel(custom)) {
@@ -132,32 +195,39 @@ async function selectOptions() {
     }
 
     if (custom) {
-      const custom_mcp = await text({
+      const customMcp = await text({
         message: "Insert custom url or command",
+        initialValue: hasSavedCustomUrl ? savedMcpUrl : undefined,
       });
-      if (isCancel(custom_mcp)) {
+      if (isCancel(customMcp)) {
         cancel("Operation cancelled.");
         process.exit(0);
       }
 
-      mcp = custom_mcp;
+      mcp = customMcp;
     } else {
-      mcp =
-        mcp_integration === "http"
-          ? "https://mcp.svelte.dev/mcp"
-          : "npx -y @sveltejs/mcp";
+      mcp = defaultMcpUrl;
     }
   }
 
   const testingTool = await confirm({
     message: "Do you want to provide the testing tool to the model?",
-    initialValue: true,
+    initialValue: savedSettings?.testingTool ?? true,
   });
 
   if (isCancel(testingTool)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
+
+  const newSettings: SavedSettings = {
+    models: selectedModels,
+    mcpIntegration: mcpIntegrationType,
+    mcpServerUrl: mcp,
+    testingTool,
+    pricingEnabled: pricing.enabled,
+  };
+  saveSettings(newSettings);
 
   return {
     models: selectedModels,
@@ -253,18 +323,41 @@ async function runSingleTest(
     if (testComponentEnabled) {
       console.log("  📋 TestComponent tool is available");
     }
-    const result = await agent.generate({ messages });
+
+    const result = await withRetry(
+      async () => agent.generate({ messages }),
+      {
+        retries: 10,
+        minTimeout: 1000,
+        factor: 2,
+      },
+    );
 
     const resultWriteContent = extractResultWriteContent(result.steps);
 
     if (!resultWriteContent) {
       console.log("  ⚠️  No ResultWrite output found");
+      const promptContent = messages[0]?.content;
+      const promptStr = promptContent
+        ? (typeof promptContent === "string"
+          ? promptContent
+          : promptContent.toString())
+        : "";
+
       return {
         testName: test.name,
-        prompt: test.prompt,
+        prompt: promptStr,
         steps: result.steps as unknown as SingleTestResult["steps"],
         resultWriteContent: null,
-        verification: null,
+        verification: {
+          testName: test.name,
+          passed: false,
+          numTests: 0,
+          numPassed: 0,
+          numFailed: 0,
+          duration: 0,
+          error: "Agent did not produce output (no ResultWrite tool call)",
+        },
       };
     }
 
@@ -273,35 +366,64 @@ async function runSingleTest(
     console.log("  ⏳ Verifying against tests...");
     const verification = await runTestVerification(test, resultWriteContent);
 
-    if (verification.passed) {
+    if (verification.validation) {
+      if (verification.validation.valid) {
+        console.log("  ✓ Code validation passed");
+      } else {
+        console.log("  ✗ Code validation failed:");
+        for (const error of verification.validation.errors) {
+          console.log(`    - ${error}`);
+        }
+      }
+    }
+
+    if (verification.validationFailed) {
       console.log(
-        `✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
+        `  ⊘ Validation failed (${verification.numPassed}/${verification.numTests} tests passed)`,
+      );
+    } else if (verification.passed) {
+      console.log(
+        `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );
     } else {
       console.log(
-        `✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
+        `  ✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
-          console.log(`- ${ft.fullName}`);
+          console.log(`    - ${ft.fullName}`);
         }
       }
     }
 
     cleanupTestEnvironment(test.name);
 
+    const promptContent = messages[0]?.content;
+    if (!promptContent) {
+      throw new Error("Failed to extract prompt content from messages");
+    }
+    const promptStr = typeof promptContent === "string"
+      ? promptContent
+      : promptContent.toString();
+
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: promptStr,
       steps: result.steps as unknown as SingleTestResult["steps"],
       resultWriteContent,
       verification,
     };
   } catch (error) {
-    console.error(`✗ Error running test: ${error}`);
+    console.error(`  ✗ Error running test: ${error}`);
+    const promptContent = messages[0]?.content;
+    const promptStr = promptContent
+      ? (typeof promptContent === "string"
+        ? promptContent
+        : promptContent.toString())
+      : "Failed: Unable to extract prompt content";
     return {
       testName: test.name,
-      prompt: test.prompt,
+      prompt: promptStr,
       steps: [],
       resultWriteContent: null,
       verification: {
@@ -345,18 +467,8 @@ async function main() {
     const lookup = pricing.lookups.get(modelId);
     if (pricing.enabled && lookup) {
       const display = getModelPricingDisplay(lookup.pricing);
-      const cacheReadText =
-        display.cacheReadCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-          : "";
-      const cacheWriteText =
-        display.cacheCreationCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-          : "";
       console.log(`   ${modelId}`);
-      console.log(
-        `      💰 ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText}`,
-      );
+      console.log(`      💰 ${formatFullPricingDisplay(display)}`);
     } else {
       console.log(`   ${modelId}`);
       if (isLMStudioModel(modelId)) {
@@ -427,22 +539,12 @@ async function main() {
 
     if (pricingLookup) {
       const display = getModelPricingDisplay(pricingLookup.pricing);
-      const cacheReadText =
-        display.cacheReadCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`
-          : "";
-      const cacheWriteText =
-        display.cacheCreationCostPerMTok !== undefined
-          ? `, ${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`
-          : "";
-      console.log(
-        `💰 Pricing: ${formatMTokCost(display.inputCostPerMTok)}/MTok in, ${formatMTokCost(display.outputCostPerMTok)}/MTok out${cacheReadText}${cacheWriteText}`,
-      );
+      console.log(`💰 Pricing: ${formatFullPricingDisplay(display)}`);
     }
 
     const model = getModelForId(modelId, providerConfig);
 
-    const testResults = [];
+    const testResults: SingleTestResult[] = [];
     const startTime = Date.now();
 
     for (let i = 0; i < tests.length; i++) {
@@ -472,6 +574,8 @@ async function main() {
     totalFailed += failed;
     const skipped = testResults.filter((r) => !r.verification).length;
 
+    const unitTestTotals = calculateUnitTestTotals(testResults);
+
     for (const result of testResults) {
       const status = result.verification
         ? result.verification.passed
@@ -483,13 +587,28 @@ async function main() {
           ? "PASSED"
           : "FAILED"
         : "SKIPPED";
-      console.log(`${status} ${result.testName}: ${statusText}`);
+
+      const validationInfo = result.verification?.validation
+        ? result.verification.validation.valid
+          ? " (validated)"
+          : " (validation failed)"
+        : "";
+
+      const unitTestInfo = result.verification
+        ? ` [${result.verification.numPassed}/${result.verification.numTests} unit tests]`
+        : "";
+
+      console.log(
+        `${status} ${result.testName}: ${statusText}${validationInfo}${unitTestInfo}`,
+      );
     }
 
     console.log("─".repeat(50));
     console.log(
-      `Total: ${passed} passed, ${failed} failed, ${skipped} skipped (${(totalDuration / 1000).toFixed(1)}s)`,
+      `Test Suites: ✓ ${passed} passed  ✗ ${failed} failed  ${skipped > 0 ? `⊘ ${skipped} skipped  ` : ""}(${unitTestTotals.passed}/${unitTestTotals.total} unit tests)`,
     );
+    console.log(`Score:       ${unitTestTotals.score}%`);
+    console.log(`Duration:    ${(totalDuration / 1000).toFixed(1)}s`);
 
     let totalCost = null;
     let pricingInfo = null;
@@ -505,7 +624,7 @@ async function main() {
         cacheCreationCostPerMTok: pricingDisplay.cacheCreationCostPerMTok,
       };
 
-      console.log("\n💰 Cost Summary");
+      console.log("\n💵 Cost Summary (No Caching)");
       console.log("─".repeat(50));
       console.log(
         `Input tokens: ${totalCost.inputTokens.toLocaleString()} (${formatCost(totalCost.inputCost)})`,
@@ -513,44 +632,45 @@ async function main() {
       console.log(
         `Output tokens: ${totalCost.outputTokens.toLocaleString()} (${formatCost(totalCost.outputCost)})`,
       );
-      if (totalCost.cachedInputTokens > 0) {
-        console.log(
-          `Cached tokens: ${totalCost.cachedInputTokens.toLocaleString()}`,
-        );
-      }
       console.log(`Total cost: ${formatCost(totalCost.totalCost)}`);
 
-      cacheSimulation = simulateCacheSavings(
-        testResults,
-        pricingLookup.pricing,
-      );
+      // Simulate cache savings if cache pricing is available
       if (
-        cacheSimulation.cacheHits > 0 ||
-        cacheSimulation.cacheWriteTokens > 0
+        pricingLookup.pricing.cacheReadInputTokenCost !== undefined &&
+        pricingLookup.pricing.cacheCreationInputTokenCost !== undefined
       ) {
-        console.log("\n📊 Cache Simulation (estimated with prompt caching):");
-        console.log("─".repeat(50));
-        const totalCacheTokens =
-          cacheSimulation.cacheHits + cacheSimulation.cacheWriteTokens;
-        console.log(
-          `Cache reads: ${cacheSimulation.cacheHits.toLocaleString()} tokens`,
+        cacheSimulation = simulateCacheSavings(
+          testResults,
+          pricingLookup.pricing,
         );
-        console.log(
-          `Cache writes: ${cacheSimulation.cacheWriteTokens.toLocaleString()} tokens`,
-        );
-        console.log(
-          `Total input tokens: ${totalCacheTokens.toLocaleString()} (reads + writes)`,
-        );
-        console.log(
-          `Estimated cost with cache: ${formatCost(cacheSimulation.simulatedCostWithCache)}`,
-        );
-        const savings =
-          totalCost.totalCost - cacheSimulation.simulatedCostWithCache;
-        const savingsPercent = (savings / totalCost.totalCost) * 100;
-        if (savings > 0) {
+
+        if (
+          cacheSimulation.cacheHits > 0 ||
+          cacheSimulation.cacheWriteTokens > 0
+        ) {
+          console.log("\n📊 Simulated Cost (With Caching)");
+          console.log("─".repeat(50));
           console.log(
-            `Potential savings: ${formatCost(savings)} (${savingsPercent.toFixed(1)}%)`,
+            `Cache reads: ${cacheSimulation.cacheHits.toLocaleString()} tokens`,
           );
+          console.log(
+            `Cache writes: ${cacheSimulation.cacheWriteTokens.toLocaleString()} tokens`,
+          );
+          console.log(
+            `Output tokens: ${cacheSimulation.outputTokens.toLocaleString()}`,
+          );
+          console.log(
+            `Simulated total: ${formatCost(cacheSimulation.simulatedCostWithCache)}`,
+          );
+
+          const savings =
+            totalCost.totalCost - cacheSimulation.simulatedCostWithCache;
+          const savingsPercent = (savings / totalCost.totalCost) * 100;
+          if (savings > 0) {
+            console.log(
+              `Potential savings: ${formatCost(savings)} (${savingsPercent.toFixed(1)}%)`,
+            );
+          }
         }
       }
     }
@@ -584,6 +704,7 @@ async function main() {
                 baseURL: providerConfig.lmstudio.baseURL,
               }
             : null,
+        unitTestTotals,
       },
     };
 

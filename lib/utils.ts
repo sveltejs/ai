@@ -1,8 +1,9 @@
 import { calculateCost, extractPricingFromGatewayModel } from "./pricing.ts";
-import type { SingleTestResult } from "./report.ts";
+import type { SingleTestResult, TotalCostInfo } from "./report.ts";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import type { TestDefinition } from "./test-discovery.ts";
 import { TokenCache } from "./token-cache.ts";
+import pRetry from "p-retry";
 
 export function sanitizeModelName(modelName: string) {
   return modelName.replace(/[^a-zA-Z0-9.]/g, "-");
@@ -54,19 +55,28 @@ export function extractResultWriteContent(steps: unknown[]) {
   return null;
 }
 
+/**
+ * Calculate the total cost WITHOUT any caching.
+ * This represents what the cost would be if prompt caching was NOT enabled.
+ * All input tokens (both inputTokens and cachedInputTokens from the API) 
+ * are charged at the full input rate.
+ */
 export function calculateTotalCost(
   tests: SingleTestResult[],
   pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
-) {
+): TotalCostInfo {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
-  let totalCachedInputTokens = 0;
 
   for (const test of tests) {
     for (const step of test.steps) {
-      totalInputTokens += step.usage.inputTokens;
-      totalOutputTokens += step.usage.outputTokens;
-      totalCachedInputTokens += step.usage.cachedInputTokens ?? 0;
+      // Sum both inputTokens and cachedInputTokens to get total input tokens
+      // The API reports cached tokens separately, but for non-cached cost,
+      // we need to charge ALL input tokens at the full rate
+      const inputTokens = step.usage.inputTokens ?? 0;
+      const cachedTokens = step.usage.cachedInputTokens ?? 0;
+      totalInputTokens += inputTokens + cachedTokens;
+      totalOutputTokens += step.usage.outputTokens ?? 0;
     }
   }
 
@@ -82,7 +92,6 @@ export function calculateTotalCost(
     totalCost: costResult.totalCost,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
-    cachedInputTokens: totalCachedInputTokens,
   };
 }
 
@@ -92,9 +101,31 @@ export function buildAgentPrompt(test: TestDefinition): ModelMessage[] {
       role: "user",
       content: `${test.prompt}
 
+## Test Suite
+
+Your component must pass the following tests:
+
+\`\`\`ts
+${test.testContent}
+\`\`\`
+
 IMPORTANT: When you have finished implementing the component, use the ResultWrite tool to output your final Svelte component code. Only output the component code itself, no explanations or markdown formatting.`,
     },
   ];
+}
+
+export interface CacheSimulationResult {
+  /** The simulated total cost with caching enabled */
+  simulatedCostWithCache: number;
+  /** Breakdown of the simulated cost */
+  simulatedInputCost: number;
+  simulatedOutputCost: number;
+  /** Total tokens read from cache (at reduced rate) */
+  cacheHits: number;
+  /** Total tokens written to cache (at cache creation rate) */
+  cacheWriteTokens: number;
+  /** Total output tokens (unchanged from non-cached) */
+  outputTokens: number;
 }
 
 /**
@@ -116,18 +147,23 @@ IMPORTANT: When you have finished implementing the component, use the ResultWrit
 export function simulateCacheSavings(
   tests: SingleTestResult[],
   pricing: NonNullable<ReturnType<typeof extractPricingFromGatewayModel>>,
-) {
-  // Default rates if not specified:
-  // - Cache read: 10% of input cost
-  // - Cache creation: 125% of input cost (25% premium)
-  const cacheReadRate =
-    pricing.cacheReadInputTokenCost ?? pricing.inputCostPerToken * 0.1;
-  const cacheWriteRate =
-    pricing.cacheCreationInputTokenCost ?? pricing.inputCostPerToken * 1.25;
+): CacheSimulationResult {
+  if (
+    pricing.cacheReadInputTokenCost === undefined ||
+    pricing.cacheCreationInputTokenCost === undefined
+  ) {
+    throw new Error(
+      "Cache pricing is required: cacheReadInputTokenCost and cacheCreationInputTokenCost must be defined",
+    );
+  }
+  const cacheReadRate = pricing.cacheReadInputTokenCost;
+  const cacheWriteRate = pricing.cacheCreationInputTokenCost;
 
   let totalCacheHits = 0; // Total tokens read from cache across all steps
   let totalCacheWriteTokens = 0; // Total tokens written to cache (including step 1)
-  let simulatedCost = 0;
+  let totalOutputTokens = 0;
+  let simulatedInputCost = 0;
+  let simulatedOutputCost = 0;
 
   for (const test of tests) {
     if (test.steps.length === 0) continue;
@@ -135,41 +171,93 @@ export function simulateCacheSavings(
     const firstStep = test.steps[0];
     if (!firstStep) continue;
 
+    // Get total input tokens for first step (inputTokens + cachedInputTokens)
+    const firstStepInputTokens = 
+      (firstStep.usage.inputTokens ?? 0) + (firstStep.usage.cachedInputTokens ?? 0);
+    const firstStepOutputTokens = firstStep.usage.outputTokens ?? 0;
+
     // Create cache with first step's input tokens
-    const cache = new TokenCache(firstStep.usage.inputTokens, pricing);
-    totalCacheWriteTokens += firstStep.usage.inputTokens;
+    const cache = new TokenCache(firstStepInputTokens, pricing);
+    totalCacheWriteTokens += firstStepInputTokens;
+    totalOutputTokens += firstStepOutputTokens;
 
     // First step: pay cache creation rate for all input
-    simulatedCost += firstStep.usage.inputTokens * cacheWriteRate;
-    simulatedCost += firstStep.usage.outputTokens * pricing.outputCostPerToken;
+    simulatedInputCost += firstStepInputTokens * cacheWriteRate;
+    simulatedOutputCost += firstStepOutputTokens * pricing.outputCostPerToken;
 
     // Add output tokens for first step (but no new input tokens yet)
-    cache.addMessage("step-0", 0, firstStep.usage.outputTokens);
+    cache.addMessage("step-0", 0, firstStepOutputTokens);
 
     // Process subsequent steps
     for (let i = 1; i < test.steps.length; i++) {
       const step = test.steps[i];
       if (!step) continue;
 
+      // Get total input tokens for this step
+      const stepInputTokens = 
+        (step.usage.inputTokens ?? 0) + (step.usage.cachedInputTokens ?? 0);
+      const stepOutputTokens = step.usage.outputTokens ?? 0;
+
       const stats = cache.getCacheStats();
       const cachedPortion = stats.currentContextTokens;
-      const newTokens = Math.max(0, step.usage.inputTokens - cachedPortion);
+      const newTokens = Math.max(0, stepInputTokens - cachedPortion);
 
       totalCacheHits += cachedPortion;
       totalCacheWriteTokens += newTokens;
+      totalOutputTokens += stepOutputTokens;
 
       // Calculate cost for this step
-      simulatedCost += cachedPortion * cacheReadRate;
-      simulatedCost += newTokens * cacheWriteRate;
-      simulatedCost += step.usage.outputTokens * pricing.outputCostPerToken;
+      simulatedInputCost += cachedPortion * cacheReadRate;
+      simulatedInputCost += newTokens * cacheWriteRate;
+      simulatedOutputCost += stepOutputTokens * pricing.outputCostPerToken;
 
-      cache.addMessage(`step-${i}`, newTokens, step.usage.outputTokens);
+      cache.addMessage(`step-${i}`, newTokens, stepOutputTokens);
     }
   }
 
   return {
-    simulatedCostWithCache: simulatedCost,
+    simulatedCostWithCache: simulatedInputCost + simulatedOutputCost,
+    simulatedInputCost,
+    simulatedOutputCost,
     cacheHits: totalCacheHits,
     cacheWriteTokens: totalCacheWriteTokens,
+    outputTokens: totalOutputTokens,
   };
+}
+
+/**
+ * Retry a function with exponential backoff using p-retry
+ * Logs all errors and retry attempts to console
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    retries?: number;
+    minTimeout?: number;
+    factor?: number;
+  } = {},
+): Promise<T> {
+  const { retries = 10, minTimeout = 1000, factor = 2 } = options;
+
+  return pRetry(fn, {
+    retries,
+    minTimeout,
+    factor,
+    randomize: true,
+    onFailedAttempt: ({ error, attemptNumber, retriesLeft }) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.log(`  ⚠️  Error: ${errorMessage}`);
+
+      const attemptDelay = minTimeout * Math.pow(factor, attemptNumber - 1);
+
+      if (retriesLeft > 0) {
+        console.log(
+          `  🔄 Retrying in ~${(attemptDelay / 1000).toFixed(1)}s (attempt ${attemptNumber}/${retries + 1})...`,
+        );
+      } else {
+        console.log(`  ✗ Max retries (${retries}) exceeded`);
+      }
+    },
+  });
 }

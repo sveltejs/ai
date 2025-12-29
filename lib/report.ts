@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { TestVerificationResult } from "./output-test-runner.ts";
+import type { ValidationResult } from "./validator-runner.ts";
 import { generateMultiTestHtml } from "./report-template.ts";
 import type { simulateCacheSavings } from "./utils.ts";
 
@@ -73,13 +74,23 @@ export interface PricingInfo {
   cacheCreationCostPerMTok?: number;
 }
 
+/**
+ * Cost information calculated WITHOUT caching.
+ * This represents the actual cost when running tests without prompt caching.
+ */
 export interface TotalCostInfo {
   inputCost: number;
   outputCost: number;
   totalCost: number;
   inputTokens: number;
   outputTokens: number;
-  cachedInputTokens: number;
+}
+
+export interface UnitTestTotals {
+  total: number;
+  passed: number;
+  failed: number;
+  score: number;
 }
 
 interface LMStudioMetadata {
@@ -98,6 +109,7 @@ interface Metadata {
   totalCost?: TotalCostInfo | null;
   cacheSimulation?: ReturnType<typeof simulateCacheSavings> | null;
   lmstudio?: LMStudioMetadata | null;
+  unitTestTotals?: UnitTestTotals;
 }
 
 export interface SingleTestResult {
@@ -113,10 +125,45 @@ export interface MultiTestResultData {
   metadata: Metadata;
 }
 
-interface LegacyResultData {
-  steps: Step[];
-  resultWriteContent?: string | null;
-  metadata?: Metadata;
+/**
+ * Calculate the score as a percentage of passed unit tests.
+ * Score = (passed / total) * 100, rounded to nearest integer.
+ * Returns 0 if no tests were run.
+ */
+export function calculateScore(passed: number, total: number): number {
+  if (total === 0) {
+    return 0;
+  }
+  return Math.round((passed / total) * 100);
+}
+
+/**
+ * Calculate unit test totals from test results.
+ * If a test's validation failed, all its unit tests are counted as failed
+ * regardless of actual test results (passed = 0, failed = numTests).
+ */
+export function calculateUnitTestTotals(tests: SingleTestResult[]): UnitTestTotals {
+  let total = 0;
+  let passed = 0;
+  let failed = 0;
+
+  for (const test of tests) {
+    if (test.verification) {
+      total += test.verification.numTests;
+
+      // If validation failed, count all tests as failed regardless of actual results
+      if (test.verification.validationFailed) {
+        failed += test.verification.numTests;
+      } else {
+        passed += test.verification.numPassed;
+        failed += test.verification.numFailed;
+      }
+    }
+  }
+
+  const score = calculateScore(passed, total);
+
+  return { total, passed, failed, score };
 }
 
 export async function generateReport(
@@ -126,33 +173,9 @@ export async function generateReport(
 ) {
   try {
     const jsonContent = await readFile(resultPath, "utf-8");
-    const data = JSON.parse(jsonContent);
+    const data = JSON.parse(jsonContent) as MultiTestResultData;
 
-    let html;
-
-    if ("tests" in data && Array.isArray(data.tests)) {
-      html = generateMultiTestHtml(data as MultiTestResultData);
-    } else {
-      const legacyData = data as LegacyResultData;
-      const multiTestData = {
-        tests: [
-          {
-            testName: "Legacy Test",
-            prompt: "Static prompt (legacy format)",
-            steps: legacyData.steps,
-            resultWriteContent: legacyData.resultWriteContent ?? null,
-            verification: null,
-          },
-        ],
-        metadata: legacyData.metadata ?? {
-          mcpEnabled: false,
-          mcpServerUrl: null,
-          timestamp: new Date().toISOString(),
-          model: "unknown",
-        },
-      };
-      html = generateMultiTestHtml(multiTestData);
-    }
+    const html = generateMultiTestHtml(data);
 
     await writeFile(outputPath, html, "utf-8");
 

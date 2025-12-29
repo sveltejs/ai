@@ -36,44 +36,4 @@ export class TokenCache {
       messageCount: this.messages.length,
     };
   }
-
-  calculateSimulatedCost(): {
-    simulatedCost: number;
-    cacheReadCost: number;
-    cacheWriteCost: number;
-    outputCost: number;
-  } {
-    if (
-      !this.pricing ||
-      !this.pricing.cacheReadInputTokenCost ||
-      !this.pricing.cacheCreationInputTokenCost
-    ) {
-      return {
-        simulatedCost: 0,
-        cacheReadCost: 0,
-        cacheWriteCost: 0,
-        outputCost: 0,
-      };
-    }
-
-    const cacheReadRate = this.pricing.cacheReadInputTokenCost;
-
-    const cacheWriteRate = this.pricing.cacheCreationInputTokenCost;
-
-    // Tokens read from cache across all API calls
-    const cacheReadCost = this.totalCachedTokens * cacheReadRate;
-
-    // Tokens written to cache across all API calls (all current tokens were written at some point)
-    const cacheWriteCost = this.currentTokens * cacheWriteRate;
-
-    // Output tokens at output rate
-    const outputCost = this.totalOutputTokens * this.pricing.outputCostPerToken;
-
-    return {
-      simulatedCost: cacheReadCost + cacheWriteCost + outputCost,
-      cacheReadCost,
-      cacheWriteCost,
-      outputCost,
-    };
-  }
 }

@@ -128,3 +128,24 @@ export function formatMTokCost(costPerMTok: number) {
   }
   return `$${costPerMTok.toFixed(2)}`;
 }
+
+export function formatFullPricingDisplay(
+  display: ReturnType<typeof getModelPricingDisplay>,
+) {
+  const parts = [
+    `${formatMTokCost(display.inputCostPerMTok)}/MTok in`,
+    `${formatMTokCost(display.outputCostPerMTok)}/MTok out`,
+  ];
+
+  if (display.cacheReadCostPerMTok !== undefined) {
+    parts.push(`${formatMTokCost(display.cacheReadCostPerMTok)}/MTok cache read`);
+  }
+
+  if (display.cacheCreationCostPerMTok !== undefined) {
+    parts.push(
+      `${formatMTokCost(display.cacheCreationCostPerMTok)}/MTok cache write`,
+    );
+  }
+
+  return parts.join(", ");
+}
