@@ -381,12 +381,27 @@ async function runSingleTest(
 
     if (!resultWriteContent) {
       console.log("  ⚠️  No ResultWrite output found");
+      const promptContent = messages[0]?.content;
+      const promptStr = promptContent
+        ? (typeof promptContent === "string"
+          ? promptContent
+          : promptContent.toString())
+        : "";
+
       return {
         testName: test.name,
-        prompt: "Failed: No ResultWrite output found",
+        prompt: promptStr,
         steps: result.steps as unknown as SingleTestResult["steps"],
         resultWriteContent: null,
-        verification: null,
+        verification: {
+          testName: test.name,
+          passed: false,
+          numTests: 0,
+          numPassed: 0,
+          numFailed: 0,
+          duration: 0,
+          error: "Agent did not produce output (no ResultWrite tool call)",
+        },
       };
     }
 
