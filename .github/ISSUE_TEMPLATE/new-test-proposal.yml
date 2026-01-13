@@ -1,0 +1,63 @@
+name: New Test Proposal
+description: Propose a new test idea for the AI benchmark
+title: "[Test Proposal]: "
+labels: ["test-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new test! This benchmark tests AI agents' ability to generate Svelte components.
+        A good test should challenge specific aspects of Svelte development and be verifiable with automated tests.
+
+  - type: input
+    id: test-name
+    attributes:
+      label: Test Name
+      description: A short, descriptive name for the test (will be used as directory name)
+      placeholder: e.g., todo-list, accordion, form-validation
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Test Description
+      description: Describe what this test aims to evaluate in the AI agent's capabilities
+      placeholder: |
+        This test evaluates the AI's ability to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Proposed Prompt
+      description: The prompt that would be given to the AI agent (content of prompt.md)
+      placeholder: |
+        # Component Task
+
+        Create a Svelte component that...
+
+        ## Requirements
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference Implementation (optional)
+      description: A working Svelte 5 component that passes the proposed tests
+      render: svelte
+      placeholder: |
+        <script>
+          let count = $state(0);
+        </script>
+
+        <button onclick={() => count++}>{count}</button>
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information that might be helpful
