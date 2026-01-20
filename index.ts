@@ -34,7 +34,7 @@ import {
 import type { LanguageModel } from "ai";
 import {
   intro,
-  multiselect,
+  autocompleteMultiselect,
   isCancel,
   cancel,
   text,
@@ -174,7 +174,7 @@ async function selectOptions() {
 
   const savedModelValues = savedSettings?.models ?? [];
 
-  const models = await multiselect({
+  const models = await autocompleteMultiselect({
     message: "Select model(s) to benchmark",
     options: modelOptions,
     initialValues: savedModelValues.filter((m) =>
@@ -368,14 +368,11 @@ async function runSingleTest(
       console.log("  📋 TestComponent tool is available");
     }
 
-    const result = await withRetry(
-      async () => agent.generate({ messages }),
-      {
-        retries: 10,
-        minTimeout: 1000,
-        factor: 2,
-      },
-    );
+    const result = await withRetry(async () => agent.generate({ messages }), {
+      retries: 10,
+      minTimeout: 1000,
+      factor: 2,
+    });
 
     const resultWriteContent = extractResultWriteContent(result.steps);
 
@@ -383,9 +380,9 @@ async function runSingleTest(
       console.log("  ⚠️  No ResultWrite output found");
       const promptContent = messages[0]?.content;
       const promptStr = promptContent
-        ? (typeof promptContent === "string"
+        ? typeof promptContent === "string"
           ? promptContent
-          : promptContent.toString())
+          : promptContent.toString()
         : "";
 
       return {
@@ -446,9 +443,10 @@ async function runSingleTest(
     if (!promptContent) {
       throw new Error("Failed to extract prompt content from messages");
     }
-    const promptStr = typeof promptContent === "string"
-      ? promptContent
-      : promptContent.toString();
+    const promptStr =
+      typeof promptContent === "string"
+        ? promptContent
+        : promptContent.toString();
 
     return {
       testName: test.name,
@@ -461,9 +459,9 @@ async function runSingleTest(
     console.error(`  ✗ Error running test: ${error}`);
     const promptContent = messages[0]?.content;
     const promptStr = promptContent
-      ? (typeof promptContent === "string"
+      ? typeof promptContent === "string"
         ? promptContent
-        : promptContent.toString())
+        : promptContent.toString()
       : "Failed: Unable to extract prompt content";
     return {
       testName: test.name,
