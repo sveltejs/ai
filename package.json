@@ -43,6 +43,7 @@
     "@testing-library/user-event": "^14.6.1",
     "ai": "^5.0.108",
     "p-retry": "^7.0.0",
+    "shiki": "^3.21.0",
     "vercel": "^49.1.2",
     "vitest": "^4.0.15",
     "zod": "^4.1.13"
