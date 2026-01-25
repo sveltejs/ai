@@ -463,6 +463,41 @@ export function getReportStyles(): string {
       overflow-y: visible;
     }
 
+    /* Shiki dual-theme support */
+    .code-preview .shiki,
+    .code-full .shiki {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 0;
+      tab-size: 2;
+      -moz-tab-size: 2;
+    }
+
+    .code-preview pre,
+    .code-full pre {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 0;
+      tab-size: 2;
+      -moz-tab-size: 2;
+    }
+
+    .shiki,
+    .shiki span {
+      color: var(--shiki-light) !important;
+      background-color: var(--shiki-light-bg) !important;
+      tab-size: 2;
+      -moz-tab-size: 2;
+    }
+
+    [data-theme="dark"] .shiki,
+    [data-theme="dark"] .shiki span {
+      color: var(--shiki-dark) !important;
+      background-color: var(--shiki-dark-bg) !important;
+      tab-size: 2;
+      -moz-tab-size: 2;
+    }
+
     /* Verification Styles */
     .verification-result {
       padding: 12px;

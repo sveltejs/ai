@@ -7,6 +7,12 @@ import type {
 } from "./report.ts";
 import { getReportStyles } from "./report-styles.ts";
 import { formatCost, formatMTokCost } from "./pricing.ts";
+import { createHighlighter, type Highlighter } from "shiki";
+
+const highlighter = await createHighlighter({
+  themes: ["github-light", "github-dark"],
+  langs: ["svelte"],
+});
 
 interface TextBlock {
   type: "text";
@@ -263,23 +269,34 @@ function renderTestSection(test: SingleTestResult, index: number) {
       : `${test.verification.numPassed}/${test.verification.numTests} unit tests`
     : "";
 
-  const resultWriteHtml = test.resultWriteContent
-    ? `<div class="output-section">
+  let resultWriteHtml = "";
+  if (test.resultWriteContent) {
+    const previewCode = getFirstLines(test.resultWriteContent, 5);
+    const highlightedPreview = highlighter.codeToHtml(previewCode, {
+      lang: "svelte",
+      themes: { light: "github-light", dark: "github-dark" },
+    });
+    const highlightedFull = highlighter.codeToHtml(test.resultWriteContent, {
+      lang: "svelte",
+      themes: { light: "github-light", dark: "github-dark" },
+    });
+
+    resultWriteHtml = `<div class="output-section">
         <div class="token-summary">
           <h4>Total Tokens Used</h4>
           <div class="token-count">${totalTokens.toLocaleString()} tokens</div>
         </div>
         <h4>Generated Component</h4>
         <div class="component-preview">
-          <pre class="code code-preview" id="${componentId}-preview">${escapeHtml(getFirstLines(test.resultWriteContent, 5))}</pre>
-          <pre class="code code-full" id="${componentId}-full" style="display: none;">${escapeHtml(test.resultWriteContent)}</pre>
+          <div class="code code-preview" id="${componentId}-preview">${highlightedPreview}</div>
+          <div class="code code-full" id="${componentId}-full" style="display: none;">${highlightedFull}</div>
           <button class="expand-button" onclick="toggleComponentCode('${componentId}')">
             <span class="expand-text">Show full code</span>
             <span class="collapse-text" style="display: none;">Show less</span>
           </button>
         </div>
-      </div>`
-    : "";
+      </div>`;
+  }
 
   return `
   <details class="test-section ${verificationStatus}" open>
