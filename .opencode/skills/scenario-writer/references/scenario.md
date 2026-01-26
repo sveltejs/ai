@@ -655,56 +655,6 @@ test("validation prevents advance", async () => {
 
 ---
 
-## 15. Modal Component
-
-### Description
-
-Modal dialog with slots for content.
-
-### Agent Prompt
-
-```
-Create a Svelte 5 modal with:
-- Props: open, title, closeOnOverlay, closeOnEscape
-- Slots: default (body), actions (footer)
-- Close button, emits close event
-- Proper ARIA attributes
-```
-
-### Testing Strategy
-
-```typescript
-test("visible when open", () => {
-  render(Modal, { props: { open: true, title: "Test" } });
-  expect(screen.getByRole("dialog")).toBeInTheDocument();
-});
-
-test("close button emits close", async () => {
-  const onClose = vi.fn();
-  render(Modal, { props: { open: true, title: "Test", onclose: onClose } });
-  await fireEvent.click(screen.getByRole("button", { name: /close/i }));
-  expect(onClose).toHaveBeenCalled();
-});
-
-test("escape closes when enabled", async () => {
-  const onClose = vi.fn();
-  render(Modal, {
-    props: { open: true, title: "Test", closeOnEscape: true, onclose: onClose },
-  });
-  await fireEvent.keyDown(document, { key: "Escape" });
-  expect(onClose).toHaveBeenCalled();
-});
-```
-
-### Validation
-
-- ✓ Uses `$props()` for open, title
-- ✓ Uses `{@render}` for slots (not `<slot>`)
-- ✓ Has `role="dialog"`, `aria-modal`, `aria-labelledby`
-- ✓ Uses `$effect()` CORRECTLY for escape listener with cleanup
-
----
-
 ## 16. Card with Slots
 
 ### Description
