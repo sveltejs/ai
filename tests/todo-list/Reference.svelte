@@ -1,10 +1,7 @@
 <svelte:options runes={true} />
 
 <script>
-	let { initial = [] } = $props();
-	
-	// Use structuredClone to properly copy the initial data
-	let todos = $state(structuredClone(initial));
+	let todos = $state([]);
 	let input_value = $state("");
 	
 	let remaining_count = $derived(todos.filter(t => !t.done).length);

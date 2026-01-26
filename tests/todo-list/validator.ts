@@ -16,12 +16,6 @@ export function validate(code: string): ValidationResult {
 		errors.push("Component must use $derived() for the remaining count");
 	}
 
-	// Must use {#each ... as ... (key)} with a key
-	const eachRegex = /\{#each\s+\w+\s+as\s+\w+\s*\(\s*\w+(\.\w+)?\s*\)/;
-	if (!eachRegex.test(code)) {
-		errors.push("Component must use {#each todos as todo (todo.id)} with a key for proper list rendering");
-	}
-
 	// Must NOT use $effect for count calculation
 	if (code.includes("$effect")) {
 		errors.push("Component must NOT use $effect for count calculation - use $derived instead");

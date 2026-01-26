@@ -1,7 +1,16 @@
 import { render, screen } from "@testing-library/svelte";
-import { expect, test, describe } from "vitest";
 import userEvent from "@testing-library/user-event";
+import { describe, expect, test } from "vitest";
 import TodoList from "./Component.svelte";
+
+async function setupInitialTodos(todos: { id: number; text: string; done: boolean }[], user: ReturnType<typeof userEvent.setup>) {
+		const input = screen.getByTestId("todo-input");
+		const addButton = screen.getByTestId("add-button");
+		for (const todo of todos) {
+			await user.type(input, todo.text);
+			await user.click(addButton);
+		}
+}
 
 describe("TodoList component", () => {
 	test("can add todo - render, type in textbox, submit form, verify new todo appears", async () => {
@@ -26,11 +35,9 @@ describe("TodoList component", () => {
 
 	test("toggle marks complete - render with initial todo, click checkbox, verify checkbox is checked", async () => {
 		const user = userEvent.setup();
-		render(TodoList, {
-			props: {
-				initial: [{ id: 1, text: "Test todo", done: false }],
-			},
-		});
+		render(TodoList);
+
+		await setupInitialTodos([{ id: 1, text: "Test todo", done: false }], user);
 
 		const checkbox = screen.getByTestId("todo-checkbox");
 
@@ -46,11 +53,9 @@ describe("TodoList component", () => {
 
 	test("delete removes todo - render with initial todo, click delete button, verify todo is gone", async () => {
 		const user = userEvent.setup();
-		render(TodoList, {
-			props: {
-				initial: [{ id: 1, text: "Test todo", done: false }],
-			},
-		});
+		render(TodoList);
+
+		await setupInitialTodos([{ id: 1, text: "Test todo", done: false }], user);
 
 		// Verify todo exists
 		expect(screen.getByTestId("todo-item")).toBeInTheDocument();
@@ -64,15 +69,16 @@ describe("TodoList component", () => {
 		expect(screen.queryByTestId("todo-item")).not.toBeInTheDocument();
 	});
 
-	test("shows remaining count - render with 2 todos (1 done, 1 not), verify shows correct count", () => {
-		render(TodoList, {
-			props: {
-				initial: [
-					{ id: 1, text: "Done todo", done: true },
-					{ id: 2, text: "Pending todo", done: false },
-				],
-			},
-		});
+	test("shows remaining count - render with 2 todos (1 done, 1 not), verify shows correct count", async () => {
+		render(TodoList);
+
+		await setupInitialTodos(
+			[
+				{ id: 1, text: "Done todo", done: true },
+				{ id: 2, text: "Pending todo", done: false },
+			],
+			userEvent.setup()
+		);
 
 		const countElement = screen.getByTestId("remaining-count");
 		// Should show "1 item left" or similar (only count incomplete todos)
