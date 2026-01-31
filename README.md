@@ -101,6 +101,7 @@ tests/
     Reference.svelte  - Reference implementation (known-good solution)
     test.ts          - Vitest test file (imports "./Component.svelte")
     prompt.md        - Prompt for the AI agent
+    validator.ts     - Extra validation to verify with static analysis that the code written adhere to Svelte best practices
 ```
 
 The benchmark:

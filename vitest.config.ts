@@ -7,6 +7,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest-setup.js"],
-    include: ["**/*.{test,spec}.{js,ts,jsx,tsx}", "**/test.ts"],
+    include: [
+      "**/*.{test,spec}.{js,ts,jsx,tsx}",
+      "**/*.svelte.{test,spec}.{js,ts}",
+      "**/test.ts",
+      "**/test.svelte.ts",
+    ],
   },
 });

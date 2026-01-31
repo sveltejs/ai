@@ -57,7 +57,7 @@ export function prepareTestEnvironment(
   const componentPath = join(testDir, "Component.svelte");
   writeFileSync(componentPath, componentCode, "utf-8");
 
-  const testFilePath = join(testDir, "test.ts");
+  const testFilePath = join(testDir, "test.svelte.ts");
   copyFileSync(test.testFile, testFilePath);
 
   return testDir;
@@ -142,7 +142,7 @@ export async function runTestVerification(
 
   try {
     const testDir = prepareTestEnvironment(test, componentCode);
-    const testFilePath = join(testDir, "test.ts");
+    const testFilePath = join(testDir, "test.svelte.ts");
 
     const vitest = await startVitest("test", [testFilePath], {
       watch: false,

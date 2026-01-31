@@ -25,7 +25,10 @@ export function discoverTests(): TestDefinition[] {
 
       if (stat.isDirectory()) {
         const referenceFile = join(entryPath, "Reference.svelte");
-        const testFile = join(entryPath, "test.ts");
+        let testFile = join(entryPath, "test.ts");
+        if (!existsSync(testFile)) {
+          testFile = join(entryPath, "test.svelte.ts");
+        }
         const promptFile = join(entryPath, "prompt.md");
         const componentFile = join(entryPath, "Component.svelte");
 
