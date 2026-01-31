@@ -42,6 +42,7 @@
     "@testing-library/svelte": "^5.2.9",
     "@testing-library/user-event": "^14.6.1",
     "ai": "^5.0.108",
+    "p-limit": "^7.2.0",
     "p-retry": "^7.0.0",
     "shiki": "^3.21.0",
     "vercel": "^49.1.2",

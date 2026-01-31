@@ -5,6 +5,32 @@ import type { TestDefinition } from "./test-discovery.ts";
 import { TokenCache } from "./token-cache.ts";
 import pRetry from "p-retry";
 
+/**
+ * Logger that buffers output for a test and flushes it all at once.
+ * Useful for parallel test execution to avoid interleaved output.
+ */
+export class TestLogger {
+  private logs: string[] = [];
+  private testName: string;
+
+  constructor(testName: string) {
+    this.testName = testName;
+  }
+
+  log(message: string) {
+    this.logs.push(message);
+  }
+
+  flush() {
+    console.log(`\n[${this.testName}]`);
+    console.log("─".repeat(50));
+    for (const log of this.logs) {
+      console.log(log);
+    }
+    this.logs = [];
+  }
+}
+
 export function sanitizeModelName(modelName: string) {
   return modelName.replace(/[^a-zA-Z0-9.]/g, "-");
 }
@@ -58,7 +84,7 @@ export function extractResultWriteContent(steps: unknown[]) {
 /**
  * Calculate the total cost WITHOUT any caching.
  * This represents what the cost would be if prompt caching was NOT enabled.
- * All input tokens (both inputTokens and cachedInputTokens from the API) 
+ * All input tokens (both inputTokens and cachedInputTokens from the API)
  * are charged at the full input rate.
  */
 export function calculateTotalCost(
@@ -172,8 +198,9 @@ export function simulateCacheSavings(
     if (!firstStep) continue;
 
     // Get total input tokens for first step (inputTokens + cachedInputTokens)
-    const firstStepInputTokens = 
-      (firstStep.usage.inputTokens ?? 0) + (firstStep.usage.cachedInputTokens ?? 0);
+    const firstStepInputTokens =
+      (firstStep.usage.inputTokens ?? 0) +
+      (firstStep.usage.cachedInputTokens ?? 0);
     const firstStepOutputTokens = firstStep.usage.outputTokens ?? 0;
 
     // Create cache with first step's input tokens
@@ -194,7 +221,7 @@ export function simulateCacheSavings(
       if (!step) continue;
 
       // Get total input tokens for this step
-      const stepInputTokens = 
+      const stepInputTokens =
         (step.usage.inputTokens ?? 0) + (step.usage.cachedInputTokens ?? 0);
       const stepOutputTokens = step.usage.outputTokens ?? 0;
 
