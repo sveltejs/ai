@@ -1,7 +1,16 @@
 import { Experimental_Agent as Agent, hasToolCall, stepCountIs } from "ai";
 import { experimental_createMCPClient as createMCPClient } from "./node_modules/@ai-sdk/mcp/dist/index.mjs";
 import { Experimental_StdioMCPTransport as StdioMCPTransport } from "./node_modules/@ai-sdk/mcp/dist/mcp-stdio/index.mjs";
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import {
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import pLimit from "p-limit";
 import {
   generateReport,
   calculateUnitTestTotals,
@@ -15,10 +24,10 @@ import {
   withRetry,
   buildAgentPrompt,
   simulateCacheSavings,
+  TestLogger,
 } from "./lib/utils.ts";
 import { discoverTests, type TestDefinition } from "./lib/test-discovery.ts";
 import {
-  setupOutputsDirectory,
   cleanupOutputsDirectory,
   cleanupTestEnvironment,
   runTestVerification,
@@ -52,6 +61,7 @@ interface SavedSettings {
   mcpServerUrl?: string;
   testingTool: boolean;
   pricingEnabled: boolean;
+  concurrencyLimit?: number;
 }
 
 function loadSettings(): SavedSettings | null {
@@ -276,12 +286,31 @@ async function selectOptions() {
     process.exit(0);
   }
 
+  const concurrencyLimitInput = await text({
+    message: "Max concurrent tests? (0 = unlimited)",
+    initialValue: savedSettings?.concurrencyLimit?.toString() ?? "0",
+    validate: (value) => {
+      const num = parseInt(value ?? "0", 10);
+      if (isNaN(num) || num < 0) {
+        return "Please enter a non-negative number";
+      }
+    },
+  });
+
+  if (isCancel(concurrencyLimitInput)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  const concurrencyLimit = parseInt(concurrencyLimitInput || "0", 10);
+
   const newSettings: SavedSettings = {
     models: selectedModels,
     mcpIntegration: mcpIntegrationType,
     mcpServerUrl: mcp,
     testingTool,
     pricingEnabled: pricing.enabled,
+    concurrencyLimit,
   };
   saveSettings(newSettings);
 
@@ -290,6 +319,7 @@ async function selectOptions() {
     mcp,
     testingTool,
     pricing,
+    concurrencyLimit,
   };
 }
 
@@ -310,16 +340,19 @@ async function runSingleTest(
   testComponentEnabled: boolean,
   testIndex: number,
   totalTests: number,
+  outputDir: string,
 ): Promise<SingleTestResult> {
-  console.log(`\n[${testIndex + 1}/${totalTests}] Running test: ${test.name}`);
-  console.log("─".repeat(50));
+  const logger = new TestLogger(test.name);
+  logger.log(`[${testIndex + 1}/${totalTests}] Running test: ${test.name}`);
 
   const messages = buildAgentPrompt(test);
 
   try {
     const tools = {
       ResultWrite: resultWriteTool,
-      ...(testComponentEnabled && { TestComponent: testComponentTool(test) }),
+      ...(testComponentEnabled && {
+        TestComponent: testComponentTool(test, outputDir),
+      }),
       ...(mcpClient ? await mcpClient.tools() : {}),
     };
 
@@ -333,18 +366,18 @@ async function runSingleTest(
           return;
         }
         stepCounter++;
-        console.log(`  Step ${stepCounter}:`);
+        logger.log(`  Step ${stepCounter}:`);
         if (step.text) {
           const preview =
             step.text.length > 100
               ? step.text.slice(0, 100) + "..."
               : step.text;
-          console.log(`💬 Text: ${preview}`);
+          logger.log(`💬 Text: ${preview}`);
         }
         if (step.toolCalls && step.toolCalls.length > 0) {
           for (const call of step.toolCalls) {
             if (call) {
-              console.log(`🔧 Tool call: ${call.toolName}`);
+              logger.log(`🔧 Tool call: ${call.toolName}`);
             }
           }
         }
@@ -356,16 +389,16 @@ async function runSingleTest(
                 resultStr.length > 80
                   ? resultStr.slice(0, 80) + "..."
                   : resultStr;
-              console.log(`📤 Tool result: ${preview}`);
+              logger.log(`📤 Tool result: ${preview}`);
             }
           }
         }
       },
     });
 
-    console.log("  ⏳ Running agent...");
+    logger.log("  ⏳ Running agent...");
     if (testComponentEnabled) {
-      console.log("  📋 TestComponent tool is available");
+      logger.log("  📋 TestComponent tool is available");
     }
 
     const result = await withRetry(async () => agent.generate({ messages }), {
@@ -377,7 +410,8 @@ async function runSingleTest(
     const resultWriteContent = extractResultWriteContent(result.steps);
 
     if (!resultWriteContent) {
-      console.log("  ⚠️  No ResultWrite output found");
+      logger.log("  ⚠️  No ResultWrite output found");
+      logger.flush();
       const promptContent = messages[0]?.content;
       const promptStr = promptContent
         ? typeof promptContent === "string"
@@ -402,42 +436,48 @@ async function runSingleTest(
       };
     }
 
-    console.log("  ✓ Component generated");
+    logger.log("  ✓ Component generated");
 
-    console.log("  ⏳ Verifying against tests...");
-    const verification = await runTestVerification(test, resultWriteContent);
+    logger.log("  ⏳ Verifying against tests...");
+    const verification = await runTestVerification(
+      test,
+      resultWriteContent,
+      outputDir,
+    );
 
     if (verification.validation) {
       if (verification.validation.valid) {
-        console.log("  ✓ Code validation passed");
+        logger.log("  ✓ Code validation passed");
       } else {
-        console.log("  ✗ Code validation failed:");
+        logger.log("  ✗ Code validation failed:");
         for (const error of verification.validation.errors) {
-          console.log(`    - ${error}`);
+          logger.log(`    - ${error}`);
         }
       }
     }
 
     if (verification.validationFailed) {
-      console.log(
+      logger.log(
         `  ⊘ Validation failed (${verification.numPassed}/${verification.numTests} tests passed)`,
       );
     } else if (verification.passed) {
-      console.log(
+      logger.log(
         `  ✓ All tests passed (${verification.numPassed}/${verification.numTests})`,
       );
     } else {
-      console.log(
+      logger.log(
         `  ✗ Tests failed (${verification.numFailed}/${verification.numTests} failed)`,
       );
       if (verification.failedTests) {
         for (const ft of verification.failedTests) {
-          console.log(`    - ${ft.fullName}`);
+          logger.log(`    - ${ft.fullName}`);
         }
       }
     }
 
-    cleanupTestEnvironment(test.name);
+    cleanupTestEnvironment(test.name, outputDir);
+
+    logger.flush();
 
     const promptContent = messages[0]?.content;
     if (!promptContent) {
@@ -456,7 +496,8 @@ async function runSingleTest(
       verification,
     };
   } catch (error) {
-    console.error(`  ✗ Error running test: ${error}`);
+    logger.log(`  ✗ Error running test: ${error}`);
+    logger.flush();
     const promptContent = messages[0]?.content;
     const promptStr = promptContent
       ? typeof promptContent === "string"
@@ -482,7 +523,8 @@ async function runSingleTest(
 }
 
 async function main() {
-  const { models, mcp, testingTool, pricing } = await selectOptions();
+  const { models, mcp, testingTool, pricing, concurrencyLimit } =
+    await selectOptions();
 
   const mcpServerUrl = mcp;
   const mcpEnabled = !!mcp;
@@ -524,6 +566,10 @@ async function main() {
     `🧪 TestComponent Tool: ${testComponentEnabled ? "Enabled" : "Disabled"}`,
   );
 
+  console.log(
+    `⚡ Concurrency: ${concurrencyLimit === 0 ? "Unlimited" : concurrencyLimit}`,
+  );
+
   console.log("\n📁 Discovering tests...");
   const tests = discoverTests();
   console.log(
@@ -535,7 +581,11 @@ async function main() {
     process.exit(1);
   }
 
-  setupOutputsDirectory();
+  // Create base outputs directory (individual tests will use unique subdirectories)
+  const baseOutputsDir = join(process.cwd(), "outputs");
+  if (!existsSync(baseOutputsDir)) {
+    mkdirSync(baseOutputsDir, { recursive: true });
+  }
 
   let mcpClient = null;
   if (mcpEnabled) {
@@ -557,6 +607,9 @@ async function main() {
     }
   }
 
+  // Set up concurrency limiter
+  const limit = pLimit(concurrencyLimit === 0 ? Infinity : concurrencyLimit);
+
   let totalFailed = 0;
 
   for (const modelId of models) {
@@ -575,22 +628,34 @@ async function main() {
 
     const model = gateway.languageModel(modelId);
 
-    const testResults: SingleTestResult[] = [];
     const startTime = Date.now();
 
-    for (let i = 0; i < tests.length; i++) {
-      const test = tests[i];
-      if (!test) continue;
-      const result = await runSingleTest(
-        test,
-        model,
-        mcpClient,
-        testComponentEnabled,
-        i,
-        tests.length,
-      );
-      testResults.push(result);
-    }
+    // Run tests in parallel with unique output directories
+    const testPromises = tests.map((test, i) =>
+      limit(async () => {
+        const uniqueOutputDir = join(baseOutputsDir, randomUUID());
+        mkdirSync(uniqueOutputDir, { recursive: true });
+
+        try {
+          return await runSingleTest(
+            test,
+            model,
+            mcpClient,
+            testComponentEnabled,
+            i,
+            tests.length,
+            uniqueOutputDir,
+          );
+        } finally {
+          // Clean up the unique directory after test completes
+          if (existsSync(uniqueOutputDir)) {
+            rmSync(uniqueOutputDir, { recursive: true, force: true });
+          }
+        }
+      }),
+    );
+
+    const testResults = await Promise.all(testPromises);
 
     const totalDuration = Date.now() - startTime;
 
@@ -738,7 +803,8 @@ async function main() {
     await generateReport(jsonPath, htmlPath);
   }
 
-  cleanupOutputsDirectory();
+  // Clean up the base outputs directory
+  cleanupOutputsDirectory(baseOutputsDir);
 
   process.exit(totalFailed > 0 ? 1 : 0);
 }

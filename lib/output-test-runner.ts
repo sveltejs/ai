@@ -10,7 +10,7 @@ import { startVitest } from "vitest/node";
 import type { TestDefinition } from "./test-discovery.ts";
 import { runValidator, type ValidationResult } from "./validator-runner.ts";
 
-const OUTPUTS_DIR = join(process.cwd(), "outputs");
+const DEFAULT_OUTPUTS_DIR = join(process.cwd(), "outputs");
 
 export interface FailedTest {
   fullName: string;
@@ -30,24 +30,27 @@ export interface TestVerificationResult {
   validationFailed?: boolean;
 }
 
-export function setupOutputsDirectory() {
-  if (existsSync(OUTPUTS_DIR)) {
-    rmSync(OUTPUTS_DIR, { recursive: true, force: true });
+export function setupOutputsDirectory(outputDir: string = DEFAULT_OUTPUTS_DIR) {
+  if (existsSync(outputDir)) {
+    rmSync(outputDir, { recursive: true, force: true });
   }
-  mkdirSync(OUTPUTS_DIR, { recursive: true });
+  mkdirSync(outputDir, { recursive: true });
 }
 
-export function cleanupOutputsDirectory() {
-  if (existsSync(OUTPUTS_DIR)) {
-    rmSync(OUTPUTS_DIR, { recursive: true, force: true });
+export function cleanupOutputsDirectory(
+  outputDir: string = DEFAULT_OUTPUTS_DIR,
+) {
+  if (existsSync(outputDir)) {
+    rmSync(outputDir, { recursive: true, force: true });
   }
 }
 
 export function prepareTestEnvironment(
   test: TestDefinition,
   componentCode: string,
+  outputDir: string = DEFAULT_OUTPUTS_DIR,
 ) {
-  const testDir = join(OUTPUTS_DIR, test.name);
+  const testDir = join(outputDir, test.name);
 
   if (existsSync(testDir)) {
     rmSync(testDir, { recursive: true, force: true });
@@ -63,8 +66,11 @@ export function prepareTestEnvironment(
   return testDir;
 }
 
-export function cleanupTestEnvironment(testName: string) {
-  const testDir = join(OUTPUTS_DIR, testName);
+export function cleanupTestEnvironment(
+  testName: string,
+  outputDir: string = DEFAULT_OUTPUTS_DIR,
+) {
+  const testDir = join(outputDir, testName);
   if (existsSync(testDir)) {
     rmSync(testDir, { recursive: true, force: true });
   }
@@ -77,8 +83,9 @@ export function cleanupTestEnvironment(testName: string) {
  */
 export async function getExpectedTestCount(
   test: TestDefinition,
+  outputDir: string = DEFAULT_OUTPUTS_DIR,
 ): Promise<number> {
-  const testDir = join(OUTPUTS_DIR, `${test.name}-reference-count`);
+  const testDir = join(outputDir, `${test.name}-reference-count`);
 
   try {
     // Setup temp directory with Reference component
@@ -134,6 +141,7 @@ export async function getExpectedTestCount(
 export async function runTestVerification(
   test: TestDefinition,
   componentCode: string,
+  outputDir: string = DEFAULT_OUTPUTS_DIR,
 ): Promise<TestVerificationResult> {
   const startTime = Date.now();
 
@@ -141,7 +149,7 @@ export async function runTestVerification(
   const validationFailed = validation ? !validation.valid : undefined;
 
   try {
-    const testDir = prepareTestEnvironment(test, componentCode);
+    const testDir = prepareTestEnvironment(test, componentCode, outputDir);
     const testFilePath = join(testDir, "test.svelte.ts");
 
     const vitest = await startVitest("test", [testFilePath], {
@@ -151,7 +159,7 @@ export async function runTestVerification(
 
     if (!vitest) {
       // Get expected test count from Reference
-      const expectedTestCount = await getExpectedTestCount(test);
+      const expectedTestCount = await getExpectedTestCount(test, outputDir);
 
       return {
         testName: test.name,
@@ -185,7 +193,7 @@ export async function runTestVerification(
 
     if (!testModules || testModules.length === 0) {
       // Get expected test count from Reference when no modules found
-      const expectedTestCount = await getExpectedTestCount(test);
+      const expectedTestCount = await getExpectedTestCount(test, outputDir);
 
       // Add validation errors to allErrors if validation failed
       if (validationFailed && validation) {
@@ -278,7 +286,7 @@ export async function runTestVerification(
 
     // If we got 0 tests from vitest but component couldn't load, get count from Reference
     if (numTests === 0) {
-      const expectedTestCount = await getExpectedTestCount(test);
+      const expectedTestCount = await getExpectedTestCount(test, outputDir);
       if (expectedTestCount > 0) {
         numTests = expectedTestCount;
         numFailed = expectedTestCount;
@@ -307,7 +315,7 @@ export async function runTestVerification(
     };
   } catch (error) {
     // Get expected test count on error
-    const expectedTestCount = await getExpectedTestCount(test);
+    const expectedTestCount = await getExpectedTestCount(test, outputDir);
 
     return {
       testName: test.name,

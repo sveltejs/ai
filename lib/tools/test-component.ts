@@ -6,7 +6,7 @@ import {
   cleanupTestEnvironment,
 } from "../output-test-runner.ts";
 
-export function testComponentTool(test: TestDefinition) {
+export function testComponentTool(test: TestDefinition, outputDir?: string) {
   return tool({
     description:
       "Test your Svelte component against the test suite. Use this to verify your implementation and get feedback on any failing tests before submitting with ResultWrite. Returns detailed information about which tests passed or failed, as well as code validation results.",
@@ -20,9 +20,9 @@ export function testComponentTool(test: TestDefinition) {
       console.log(`[TestComponent] Testing ${lines} lines of code...`);
 
       try {
-        const result = await runTestVerification(test, content);
+        const result = await runTestVerification(test, content, outputDir);
 
-        cleanupTestEnvironment(test.name);
+        cleanupTestEnvironment(test.name, outputDir);
 
         // Build response with validation info
         const response: {
@@ -90,7 +90,7 @@ export function testComponentTool(test: TestDefinition) {
 
         return response;
       } catch (error) {
-        cleanupTestEnvironment(test.name);
+        cleanupTestEnvironment(test.name, outputDir);
         console.log(`[TestComponent] ✗ Error running tests`);
         return {
           success: false,
