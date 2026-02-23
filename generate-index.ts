@@ -12,6 +12,7 @@ interface ResultSummary {
   passedTests: number;
   failedTests: number;
   totalCost: number | null;
+  cachedCost: number | null;
   mcpEnabled: boolean;
 }
 
@@ -49,6 +50,7 @@ function getResultSummaries(): ResultSummary[] {
         passedTests,
         failedTests,
         totalCost: data.metadata.totalCost?.totalCost ?? null,
+        cachedCost: data.metadata.cacheSimulation?.simulatedCostWithCache ?? null,
         mcpEnabled: data.metadata.mcpEnabled,
       });
     } catch (error) {
@@ -87,6 +89,8 @@ function generateIndexHtml(summaries: ResultSummary[]): string {
       const scoreClass = getScoreClass(s.score);
       const costDisplay =
         s.totalCost !== null ? formatCost(s.totalCost) : "N/A";
+      const cachedCostDisplay =
+        s.cachedCost !== null ? formatCost(s.cachedCost) : "N/A";
       const mcpBadge = s.mcpEnabled
         ? '<span class="badge mcp-enabled">MCP</span>'
         : '<span class="badge mcp-disabled">No MCP</span>';
@@ -100,10 +104,11 @@ function generateIndexHtml(summaries: ResultSummary[]): string {
         <td class="timestamp">${formatTimestamp(s.timestamp)}</td>
         <td><span class="score ${scoreClass}">${s.score}%</span></td>
         <td class="tests">
-          <span class="passed">${s.passedTests}</span> / 
+          <span class="passed">${s.passedTests}</span> /
           <span class="total">${s.totalTests}</span>
         </td>
         <td class="cost">${costDisplay}</td>
+        <td class="cost">${cachedCostDisplay}</td>
         <td class="actions">
           <a href="${s.htmlFilename}" class="btn btn-view">View Report</a>
           <a href="${s.filename}" class="btn btn-json">JSON</a>
@@ -415,6 +420,7 @@ function generateIndexHtml(summaries: ResultSummary[]): string {
           <th>Score</th>
           <th>Tests</th>
           <th>Cost</th>
+          <th>Cached Cost</th>
           <th>Actions</th>
         </tr>
       </thead>
