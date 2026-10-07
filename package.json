@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --fix",
     "tsc": "tsc --noEmit",
     "vercel:link": "vercel link",
-    "vercel:env:pull": "vercel env pull .env.local --yes"
+    "vercel:env:pull": "vercel env pull .env.local --yes",
+    "secrets": "bun run scripts/secrets.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
